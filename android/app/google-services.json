@@ -1,0 +1,29 @@
+{
+  "project_info": {
+    "project_number": "366644937476",
+    "project_id": "cz-maindb",
+    "storage_bucket": "cz-maindb.firebasestorage.app"
+  },
+  "client": [
+    {
+      "client_info": {
+        "mobilesdk_app_id": "1:366644937476:android:f8147a85f06547b5ce8651",
+        "android_client_info": {
+          "package_name": "com.example.catzoteam"
+        }
+      },
+      "oauth_client": [],
+      "api_key": [
+        {
+          "current_key": "AIzaSyAxECYe09HGFN86IlXyNCabrTtOB8G5720"
+        }
+      ],
+      "services": {
+        "appinvite_service": {
+          "other_platform_oauth_client": []
+        }
+      }
+    }
+  ],
+  "configuration_version": "1"
+}
