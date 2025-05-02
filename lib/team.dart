@@ -2,7 +2,7 @@ import 'package:flutter/material.dart';
 import 'package:provider/provider.dart';
 import 'package:cloud_firestore/cloud_firestore.dart';
 import 'package:catzoteam/provider.dart';
-
+import 'package:intl/intl.dart';
 class TeamScreen extends StatefulWidget {
   final String selectedBranchCode;
 
@@ -106,7 +106,12 @@ class _TeamScreenState extends State<TeamScreen> {
           return {"title": category["title"], "color": category["color"], "initials": category["initials"], "tasks": <Map<String, dynamic>>[]};
         }).toList();
 
-        for (var task in taskProvider.displayedTasks) {
+        final todayStr = DateFormat('yyyy-MM-dd').format(DateTime.now());
+
+        for (var task in taskProvider.displayedTasks.where((task) {
+          final taskDateStr = task["date"]?.toString() ?? '';
+          return taskDateStr == todayStr;
+        })) {
           String taskId = task["taskID"] ?? '';
           String initials = taskId.isNotEmpty && taskId.contains('_') ? taskId.split('_')[0] : '';
 

@@ -5,6 +5,7 @@ import 'package:lottie/lottie.dart';
 import 'package:cloud_firestore/cloud_firestore.dart';
 import 'package:catzoteam/provider.dart';
 import 'package:intl/intl.dart';
+import 'dart:math';
 
 const MaterialColor Colors_bronze = MaterialColor(0xFFCD7F32, <int, Color>{
   500: Color(0xFFCD7F32),
@@ -20,7 +21,7 @@ class OverviewScreen extends StatefulWidget {
   _OverviewScreenState createState() => _OverviewScreenState();
 }
 
-class _OverviewScreenState extends State<OverviewScreen> {
+class _OverviewScreenState extends State<OverviewScreen> with TickerProviderStateMixin {
   List<String> staffMembers = [];
   bool _isLoadingStaff = true;
   String _errorMessage = '';
@@ -50,11 +51,32 @@ class _OverviewScreenState extends State<OverviewScreen> {
   PageController _completedController = PageController();
   int _completedPage = 0;
 
+  late AnimationController _warningAnimController;
+  late Animation<double> _warningScaleAnimation;
+  late Animation<double> _warningOpacityAnimation;
+  final Set<int> _triggeredWarnings = {};
+  final List<int> _warningMilestones = [20, 40];
+  final Random _random = Random();
 
   @override
   void initState() {
     super.initState();
     _fetchStaffMembers();
+    
+    _warningAnimController = AnimationController(
+      duration: const Duration(milliseconds: 800),
+      vsync: this,
+    );
+
+    _warningScaleAnimation = TweenSequence<double>([
+      TweenSequenceItem(tween: Tween(begin: 0.0, end: 1.2), weight: 40),
+      TweenSequenceItem(tween: Tween(begin: 1.2, end: 1.0), weight: 60),
+    ]).animate(_warningAnimController);
+
+    _warningOpacityAnimation = TweenSequence<double>([
+      TweenSequenceItem(tween: Tween(begin: 0.0, end: 1.0), weight: 40),
+      TweenSequenceItem(tween: Tween(begin: 1.0, end: 1.0), weight: 60),
+    ]).animate(_warningAnimController);
   }
 
   Future<void> _fetchStaffMembers() async {
@@ -85,6 +107,17 @@ class _OverviewScreenState extends State<OverviewScreen> {
     }
   }
 
+  double estimateTaskHeight(Map<String, dynamic> task) {
+    double baseHeight = 100; // ID + title
+    if ((task['catName'] ?? '').toString().trim().isNotEmpty) {
+      baseHeight += 20;
+    }
+    if (task['isAssisting'] == true) {
+      baseHeight += 20;
+    }
+    return baseHeight;
+  }
+  
   void _checkAndAddEarnedBadges(int dailyPoints) {
     const milestones = [45, 55, 65, 75, 85];
     
@@ -128,6 +161,37 @@ class _OverviewScreenState extends State<OverviewScreen> {
         );
       },
     );
+  }
+
+  void _checkWarningMilestones(int dailyPoints) {
+    final now = TimeOfDay.now();
+    final timeValue = Duration(hours: now.hour, minutes: now.minute);
+
+    if (timeValue >= const Duration(hours: 12, minutes: 30) && dailyPoints < 20 && !_triggeredWarnings.contains(20)) {
+      setState(() {
+        _triggeredWarnings.add(20);
+      });
+      _warningAnimController.forward(from: 0.0);
+      print("⚠️ Warning: <20 points after 12:30pm");
+    }
+
+    if (timeValue >= const Duration(hours: 16, minutes: 0) && dailyPoints < 40 && !_triggeredWarnings.contains(40)) {
+      setState(() {
+        _triggeredWarnings.add(40);
+      });
+      _warningAnimController.forward(from: 0.0);
+      print("⚠️ Warning: <40 points after 4:00pm");
+    }
+
+    // Auto-resolve if milestone met
+    for (int m in _warningMilestones) {
+      if (dailyPoints >= m && _triggeredWarnings.contains(m)) {
+        setState(() {
+          _triggeredWarnings.remove(m);
+        });
+        print("✅ Resolved warning for $m points");
+      }
+    }
   }
 
   @override
@@ -186,6 +250,7 @@ class _OverviewScreenState extends State<OverviewScreen> {
 
         WidgetsBinding.instance.addPostFrameCallback((_) {
           _checkAndAddEarnedBadges(dailyPoints);
+          _checkWarningMilestones(dailyPoints);
         });
 
         return Container(
@@ -410,7 +475,7 @@ class _OverviewScreenState extends State<OverviewScreen> {
               child: CustomPaint(
               painter: RoundedLinearProgressPainter(
                 value,
-                (taskProvider.getStaffInProgressPoints(widget.userName) / targetPoints).clamp(0.0, 1.0),
+                (taskProvider.getStaffInProgressPoints(widget.userName) / 85).clamp(0.0, 1.0),
                 ),
               ),
             );
@@ -424,35 +489,93 @@ class _OverviewScreenState extends State<OverviewScreen> {
               width: double.infinity,
               height: 20,
               child: Stack(
-                children: milestones.asMap().entries.map((entry) {
-                  int milestone = entry.value;
-                  double fraction = milestone / maxPoints;
-                  bool isReached = dailyPoints >= milestone;
+                children: [
+                  // Milestone labels
+                  ... milestones.asMap().entries.map((entry) {
+                    int milestone = entry.value;
+                    double fraction = milestone / maxPoints;
+                    bool isReached = dailyPoints >= milestone;
 
-                  double leftPosition;
-                  if (milestone == 85) {
-                    leftPosition = availableWidth - 22.5;
-                  } else {
-                    leftPosition = fraction * availableWidth - 15;
-                  }
+                    double leftPosition;
+                    if (milestone == 85) {
+                      leftPosition = availableWidth - 22.5;
+                    } else {
+                      leftPosition = fraction * availableWidth - 15;
+                    }
 
-                  return Positioned(
-                    left: leftPosition,
-                    child: SizedBox(
-                      width: 30,
-                      child: Center(
-                        child: Text(
-                          milestone.toString(),
-                          style: TextStyle(
-                            color: isReached ? Colors.deepOrange : Colors.black38,
-                            fontSize: 14,
-                            fontWeight: FontWeight.bold,
+                    return Positioned(
+                      left: leftPosition,
+                      child: SizedBox(
+                        width: 30,
+                        child: Center(
+                          child: Text(
+                            milestone.toString(),
+                            style: TextStyle(
+                              color: isReached ? Colors.deepOrange : Colors.black38,
+                              fontSize: 14,
+                              fontWeight: FontWeight.bold,
+                            ),
                           ),
                         ),
                       ),
-                    ),
-                  );
-                }).toList(),
+                    );
+                  }).toList(),
+
+                  // ⚠️ Add warning icons here
+                  ..._triggeredWarnings.map((milestone) {
+                    return Positioned(
+                      left: (availableWidth * (milestone / maxPoints)) - 20,
+                      top: -30,
+                      child: GestureDetector(
+                        onTap: () => _showWarningPopup(milestone),
+                        child: AnimatedBuilder(
+                          animation: _warningAnimController,
+                          builder: (context, child) {
+                            final jitter = _random.nextDouble() * 0.05;
+                            return Transform.scale(
+                              scale: _warningScaleAnimation.value + jitter,
+                              child: Opacity(
+                                opacity: _warningOpacityAnimation.value,
+                                child: Stack(
+                                  children: [
+                                    Container(
+                                      width: 36,
+                                      height: 36,
+                                      decoration: BoxDecoration(
+                                        color: Colors.red.withOpacity(0.3),
+                                        shape: BoxShape.circle,
+                                      ),
+                                    ),
+                                    Container(
+                                      width: 36,
+                                      height: 36,
+                                      decoration: BoxDecoration(
+                                        gradient: const RadialGradient(
+                                          colors: [Color(0xFFFF5252), Color(0xFFD32F2F)],
+                                          center: Alignment.center,
+                                          radius: 0.8,
+                                        ),
+                                        shape: BoxShape.circle,
+                                        boxShadow: [
+                                          BoxShadow(
+                                            color: Colors.red.withOpacity(0.4),
+                                            blurRadius: 8,
+                                            offset: const Offset(0, 4),
+                                          ),
+                                        ],
+                                      ),
+                                      child: const Icon(Icons.warning_amber_rounded, color: Colors.white, size: 20),
+                                    ),
+                                  ],
+                                ),
+                              ),
+                            );
+                          },
+                        ),
+                      ),
+                    );
+                  }).toList(),
+                ],
               ),
             );
           },
@@ -506,6 +629,37 @@ class _OverviewScreenState extends State<OverviewScreen> {
           ],
         );
       },
+    );
+  }
+
+  void _showWarningPopup(int milestone) {
+    showDialog(
+      context: context,
+      builder: (_) => AlertDialog(
+        shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(20)),
+        backgroundColor: Colors.white,
+        title: Row(
+          children: [
+            Container(
+              padding: const EdgeInsets.all(8),
+              decoration: BoxDecoration(
+                color: Colors.red.shade100,
+                borderRadius: BorderRadius.circular(8),
+              ),
+              child: Icon(Icons.warning_amber_rounded, color: Colors.red.shade700, size: 28),
+            ),
+            const SizedBox(width: 12),
+            const Text("Deadline Missed", style: TextStyle(fontWeight: FontWeight.bold)),
+          ],
+        ),
+        content: Text("You didn't reach $milestone points before the deadline. This warning will stay until you reach $milestone points."),
+        actions: [
+          TextButton(
+            onPressed: () => Navigator.of(context).pop(),
+            child: const Text("Understood"),
+          ),
+        ],
+      ),
     );
   }
 
@@ -581,100 +735,100 @@ class _OverviewScreenState extends State<OverviewScreen> {
     );
   }
 
-  void _showTrencheSelectionDialog(BuildContext context, TaskProvider taskProvider) {
-    final List<String> trencheOptions = ["35", "40", "45", "50", "55", "60"];
-    String? selectedTrenche = taskProvider.getSelectedTrenche(widget.userName);
+  // void _showTrencheSelectionDialog(BuildContext context, TaskProvider taskProvider) {
+  //   final List<String> trencheOptions = ["35", "40", "45", "50", "55", "60"];
+  //   String? selectedTrenche = taskProvider.getSelectedTrenche(widget.userName);
 
-    showDialog(
-      context: context,
-      builder: (context) {
-        return AlertDialog(
-          shape: RoundedRectangleBorder(
-            borderRadius: BorderRadius.circular(20),
-          ),
-          backgroundColor: Colors.white,
-          title: const Text(
-            "Select Trenche for the Month",
-            style: TextStyle(
-              fontSize: 20,
-              fontWeight: FontWeight.bold,
-              color: Colors.black87,
-            ),
-          ),
-          content: StatefulBuilder(
-            builder: (BuildContext context, StateSetter setState) {
-              return SizedBox(
-                width: 300,
-                child: Column(
-                  mainAxisSize: MainAxisSize.min,
-                  children: [
-                    DropdownButton<String>(
-                      value: selectedTrenche,
-                      isExpanded: true,
-                      hint: const Text("Select Trenche"),
-                      items: trencheOptions.map((String trenche) {
-                        return DropdownMenuItem<String>(
-                          value: trenche,
-                          child: Text("Trenche $trenche - ${taskProvider.getTrencheTargetPoints(trenche)} Points Daily"),
-                        );
-                      }).toList(),
-                      onChanged: (String? newValue) {
-                        setState(() {
-                          selectedTrenche = newValue;
-                        });
-                      },
-                    ),
-                  ],
-                ),
-              );
-            },
-          ),
-          actions: [
-            TextButton(
-              onPressed: () {
-                Navigator.pop(context);
-              },
-              child: const Text(
-                "Cancel",
-                style: TextStyle(
-                  color: Colors.grey,
-                  fontSize: 16,
-                ),
-              ),
-            ),
-            ElevatedButton(
-              onPressed: () {
-                if (selectedTrenche != null) {
-                  taskProvider.setSelectedTrenche(widget.userName, selectedTrenche!);
-                  ScaffoldMessenger.of(context).showSnackBar(
-                    SnackBar(
-                      content: Text("Selected Trenche $selectedTrenche for the month"),
-                      duration: const Duration(seconds: 2),
-                      backgroundColor: Colors.green,
-                    ),
-                  );
-                  Navigator.pop(context);
-                }
-              },
-              style: ElevatedButton.styleFrom(
-                backgroundColor: Colors.orange,
-                shape: RoundedRectangleBorder(
-                  borderRadius: BorderRadius.circular(10),
-                ),
-              ),
-              child: const Text(
-                "Confirm",
-                style: TextStyle(
-                  color: Colors.white,
-                  fontSize: 16,
-                ),
-              ),
-            ),
-          ],
-        );
-      },
-    );
-  }
+  //   showDialog(
+  //     context: context,
+  //     builder: (context) {
+  //       return AlertDialog(
+  //         shape: RoundedRectangleBorder(
+  //           borderRadius: BorderRadius.circular(20),
+  //         ),
+  //         backgroundColor: Colors.white,
+  //         title: const Text(
+  //           "Select Trenche for the Month",
+  //           style: TextStyle(
+  //             fontSize: 20,
+  //             fontWeight: FontWeight.bold,
+  //             color: Colors.black87,
+  //           ),
+  //         ),
+  //         content: StatefulBuilder(
+  //           builder: (BuildContext context, StateSetter setState) {
+  //             return SizedBox(
+  //               width: 300,
+  //               child: Column(
+  //                 mainAxisSize: MainAxisSize.min,
+  //                 children: [
+  //                   DropdownButton<String>(
+  //                     value: selectedTrenche,
+  //                     isExpanded: true,
+  //                     hint: const Text("Select Trenche"),
+  //                     items: trencheOptions.map((String trenche) {
+  //                       return DropdownMenuItem<String>(
+  //                         value: trenche,
+  //                         child: Text("Trenche $trenche - ${taskProvider.getTrencheTargetPoints(trenche)} Points Daily"),
+  //                       );
+  //                     }).toList(),
+  //                     onChanged: (String? newValue) {
+  //                       setState(() {
+  //                         selectedTrenche = newValue;
+  //                       });
+  //                     },
+  //                   ),
+  //                 ],
+  //               ),
+  //             );
+  //           },
+  //         ),
+  //         actions: [
+  //           TextButton(
+  //             onPressed: () {
+  //               Navigator.pop(context);
+  //             },
+  //             child: const Text(
+  //               "Cancel",
+  //               style: TextStyle(
+  //                 color: Colors.grey,
+  //                 fontSize: 16,
+  //               ),
+  //             ),
+  //           ),
+  //           ElevatedButton(
+  //             onPressed: () {
+  //               if (selectedTrenche != null) {
+  //                 taskProvider.setSelectedTrenche(widget.userName, selectedTrenche!);
+  //                 ScaffoldMessenger.of(context).showSnackBar(
+  //                   SnackBar(
+  //                     content: Text("Selected Trenche $selectedTrenche for the month"),
+  //                     duration: const Duration(seconds: 2),
+  //                     backgroundColor: Colors.green,
+  //                   ),
+  //                 );
+  //                 Navigator.pop(context);
+  //               }
+  //             },
+  //             style: ElevatedButton.styleFrom(
+  //               backgroundColor: Colors.orange,
+  //               shape: RoundedRectangleBorder(
+  //                 borderRadius: BorderRadius.circular(10),
+  //               ),
+  //             ),
+  //             child: const Text(
+  //               "Confirm",
+  //               style: TextStyle(
+  //                 color: Colors.white,
+  //                 fontSize: 16,
+  //               ),
+  //             ),
+  //           ),
+  //         ],
+  //       );
+  //     },
+  //   );
+  // }
 
   Widget _buildStatsAndSuggestionsCard() {
     return Consumer<TaskProvider>(
@@ -998,6 +1152,18 @@ class _OverviewScreenState extends State<OverviewScreen> {
   }
 
   Widget _buildIncompleteTaskList(List<Map<String, dynamic>> tasks) {
+    final pages = List.generate(
+      (tasks.length / 3).ceil(),
+      (i) {
+        final start = i * 3;
+        final end = (start + 3 > tasks.length) ? tasks.length : start + 3;
+        return tasks.sublist(start, end);
+      },
+    );
+
+    final pageHeights = pages.map((page) => page.map(estimateTaskHeight).fold(0.0, (a, b) => a + b)).toList();
+    final maxHeight = pageHeights.isNotEmpty ? pageHeights.reduce(max) : 0.0;
+
     return Container(
       padding: const EdgeInsets.fromLTRB(20, 20, 10, 20),
       decoration: _boxDecoration(),
@@ -1012,10 +1178,8 @@ class _OverviewScreenState extends State<OverviewScreen> {
             ],
           ),
           const SizedBox(height: 10),
-          AnimatedContainer(
-            duration: const Duration(milliseconds: 300),
-            curve: Curves.easeInOut,
-            height: tasks.length < 3 ? (tasks.length * 103) : 310,
+          SizedBox(
+            height: maxHeight,
             child: PageView.builder(
               controller: _incompleteController,
               scrollDirection: Axis.vertical,
@@ -1024,12 +1188,9 @@ class _OverviewScreenState extends State<OverviewScreen> {
                   _incompletePage = index;
                 });
               },
-              itemCount: (tasks.length / 3).ceil(),
+              itemCount: pages.length,
               itemBuilder: (context, pageIndex) {
-                final start = pageIndex * 3;
-                final end = (start + 3 > tasks.length) ? tasks.length : start + 3;
-                final taskSlice = tasks.sublist(start, end);
-
+                final taskSlice = pages[pageIndex];
                 return Row(
                   children: [
                     Expanded(
@@ -1068,19 +1229,19 @@ class _OverviewScreenState extends State<OverviewScreen> {
                                   ),
                                 ),
                               ],
-                            ),
+                            ),  
                           );
                         }).toList(),
                       ),
                     ),
                     const SizedBox(width: 10),
-                    if (tasks.length > 3)
+                    if (pages.length > 1)
                       Expanded(
                         flex: 1,
                         child: Column(
                           mainAxisAlignment: MainAxisAlignment.center,
                           children: List.generate(
-                            (tasks.length / 3).ceil(),
+                            pages.length,
                             (index) => Container(
                               width: 8,
                               height: 8,
@@ -1097,7 +1258,7 @@ class _OverviewScreenState extends State<OverviewScreen> {
                 );
               },
             ),
-          ),
+          )
         ],
       ),
     );
@@ -1106,6 +1267,18 @@ class _OverviewScreenState extends State<OverviewScreen> {
   Widget _buildAssignedTaskList(List<Map<String, dynamic>> tasksToShow, TaskProvider taskProvider) {
     return Consumer<TaskProvider>(
       builder: (context, taskProvider, child) {
+        final pages = List.generate(
+          (tasksToShow.length / 3).ceil(),
+          (i) {
+            final start = i * 3;
+            final end = (start + 3 > tasksToShow.length) ? tasksToShow.length : start + 3;
+            return tasksToShow.sublist(start, end);
+          },
+        );
+
+        final pageHeights = pages.map((page) => page.map(estimateTaskHeight).fold(0.0, (a, b) => a + b)).toList();
+        final maxHeight = pageHeights.isNotEmpty ? pageHeights.reduce(max) : 0.0;
+        
         return Container(
           padding: const EdgeInsets.fromLTRB(20, 20, 10, 20),
           decoration: _boxDecoration(),
@@ -1123,74 +1296,66 @@ class _OverviewScreenState extends State<OverviewScreen> {
               if (tasksToShow.isEmpty)
                 const Center(child: Text('No tasks assigned', style: TextStyle(color: Colors.grey)))
               else
-                AnimatedContainer(
-                  duration: const Duration(milliseconds: 300),
-                  curve: Curves.easeInOut,
-                  height: tasksToShow.length < 3 ? (tasksToShow.length * 103) : 310,
-                  child: Stack(
-                    children: [
-                      PageView.builder(
-                        controller: _assignedController,
-                        scrollDirection: Axis.vertical,
-                        onPageChanged: (index) {
-                          setState(() {
-                            _assignedPage = index;
-                          });
-                        },
-                        itemCount: (tasksToShow.length / 3).ceil(),
-                        itemBuilder: (context, pageIndex) {
-                          final start = pageIndex * 3;
-                          final end = (start + 3 > tasksToShow.length) ? tasksToShow.length : start + 3;
-                          final taskSlice = tasksToShow.sublist(start, end);
+                SizedBox(
+                  height: maxHeight,
+                  child: PageView.builder(
+                    controller: _assignedController,
+                    scrollDirection: Axis.vertical,
+                    onPageChanged: (index) {
+                      setState(() {
+                        _assignedPage = index;
+                      });
+                    },
+                    itemCount: pages.length,
+                    itemBuilder: (context, pageIndex) {
+                      final taskSlice = pages[pageIndex];
 
-                          return Row(
-                            children: [
-                              Expanded(
-                                flex: 20,
-                                child: Column(
-                                  children: taskSlice.map((task) {
-                                    return _slidableTaskCard(
-                                      task['taskID'],
-                                      task['task'],
-                                      task['catName'] ?? '',
-                                      int.tryParse(task["points"].toString()) ?? 0,
-                                      _getTaskColor(task),
-                                      taskProvider,
-                                      (task["taskID"] ?? '').startsWith("GR"),
-                                      isAssisting: task["assignee"] != widget.userName &&
-                                        ((task["assistant1"] == widget.userName && task["assistant1"] != "none") ||
-                                         (task["assistant2"] == widget.userName && task["assistant2"] != "none")),
-                                    );
-                                  }).toList(),
-                                ),
-                              ),
-                              const SizedBox(width: 10),
-                              if (tasksToShow.length > 3)
-                                Expanded(
-                                  flex: 1,
-                                  child: Column(
-                                    mainAxisAlignment: MainAxisAlignment.center,
-                                    children: List.generate(
-                                      (tasksToShow.length / 3).ceil(),
-                                      (index) => Container(
-                                        width: 8,
-                                        height: 8,
-                                        margin: const EdgeInsets.symmetric(vertical: 6),
-                                        decoration: BoxDecoration(
-                                          shape: BoxShape.circle,
-                                          color: _assignedPage == index ? Colors.orange : Colors.orange[100],
-                                        ),
-                                      ),
+                      return Row(
+                        children: [
+                          Expanded(
+                            flex: 20,
+                            child: Column(
+                              children: taskSlice.map((task) {
+                                return _slidableTaskCard(
+                                  task['taskID'],
+                                  task['task'],
+                                  task['catName'] ?? '',
+                                  int.tryParse(task["points"].toString()) ?? 0,
+                                  _getTaskColor(task),
+                                  taskProvider,
+                                  (task["taskID"] ?? '').startsWith("GR"),
+                                  isAssisting: task["assignee"] != widget.userName &&
+                                    ((task["assistant1"] == widget.userName && task["assistant1"] != "none") ||
+                                     (task["assistant2"] == widget.userName && task["assistant2"] != "none")),
+                                );
+                              }).toList(),
+                            ),
+                          ),
+                          const SizedBox(width: 10),
+                          if (pages.length > 1)
+                            Expanded(
+                              flex: 1,
+                              child: Column(
+                                mainAxisAlignment: MainAxisAlignment.center,
+                                children: List.generate(
+                                  pages.length,
+                                  (index) => Container(
+                                    width: 8,
+                                    height: 8,
+                                    margin: const EdgeInsets.symmetric(vertical: 6),
+                                    decoration: BoxDecoration(
+                                      shape: BoxShape.circle,
+                                      color: _assignedPage == index ? Colors.orange : Colors.orange[100],
                                     ),
                                   ),
                                 ),
-                            ],
-                          );
-                        },
-                      ),
-                    ],
-                  ),
+                              ),
+                            ),
+                      ],
+                    );
+                  },
                 ),
+              )
             ],
           ),
         );
@@ -1223,6 +1388,18 @@ class _OverviewScreenState extends State<OverviewScreen> {
           return task;  
         }).toList();
 
+        final pages = List.generate(
+          (tasksToShow.length / 3).ceil(),
+          (i) {
+            final start = i * 3;
+            final end = (start + 3 > tasksToShow.length) ? tasksToShow.length : start + 3;
+            return tasksToShow.sublist(start, end);
+          },
+        );
+
+        final pageHeights = pages.map((page) => page.map(estimateTaskHeight).fold(0.0, (a, b) => a + b)).toList();
+        final maxHeight = pageHeights.isNotEmpty ? pageHeights.reduce(max) : 0.0;
+
         return Container(
           padding: const EdgeInsets.fromLTRB(20, 20, 10, 20),
           decoration: _boxDecoration(),
@@ -1240,10 +1417,8 @@ class _OverviewScreenState extends State<OverviewScreen> {
               if (tasksToShow.isEmpty)
                 const Center(child: Text('No tasks completed yet', style: TextStyle(color: Colors.grey)))
               else
-                AnimatedContainer(
-                  duration: const Duration(milliseconds: 300),
-                  curve: Curves.easeInOut,
-                  height: tasksToShow.length < 3 ? (tasksToShow.length * 103) : 310,
+                SizedBox(
+                  height: maxHeight,
                   child: PageView.builder(
                     controller: _completedController,
                     scrollDirection: Axis.vertical,
@@ -1252,12 +1427,9 @@ class _OverviewScreenState extends State<OverviewScreen> {
                         _completedPage = index;
                       });
                     },
-                    itemCount: (tasksToShow.length / 3).ceil(),
+                    itemCount: pages.length,
                     itemBuilder: (context, pageIndex) {
-                      final start = pageIndex * 3;
-                      final end = (start + 3 > tasksToShow.length) ? tasksToShow.length : start + 3;
-                      final taskSlice = tasksToShow.sublist(start, end);
-
+                      final taskSlice = pages[pageIndex];
                       return Row(
                         children: [
                           Expanded(
@@ -1304,13 +1476,13 @@ class _OverviewScreenState extends State<OverviewScreen> {
                             ),
                           ),
                           const SizedBox(width: 10),
-                          if (tasksToShow.length > 3)
+                          if (pages.length > 1)
                             Expanded(
                               flex: 1,
                               child: Column(
                                 mainAxisAlignment: MainAxisAlignment.center,
                                 children: List.generate(
-                                  (tasksToShow.length / 3).ceil(),
+                                  pages.length,
                                   (index) => Container(
                                     width: 8,
                                     height: 8,
@@ -1327,8 +1499,7 @@ class _OverviewScreenState extends State<OverviewScreen> {
                       );
                     },
                   ),
-                ),
-              
+                )            
             ],
           ),
         );

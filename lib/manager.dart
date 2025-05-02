@@ -45,6 +45,36 @@ class _ManagerScreenState extends State<ManagerScreen> {
     {"title": "Housekeeping & General", "value": "housekeepingGeneral", "color": Colors.orange[100], "initials": "HG"},
   ];
 
+  Map<String, List<Map<String, dynamic>>> groupTasksByCategory(List<Map<String, dynamic>> tasks, List<Map<String, dynamic>> categories) {
+    final Map<String, List<Map<String, dynamic>>> grouped = {
+      for (var category in categories) category["title"]: [],
+      "Unknown": [],
+    };
+
+    for (var task in tasks) {
+      final category = _getCategoryForTask(task);
+      if (!grouped.containsKey(category)) {
+        grouped["Unknown"]!.add(task);
+      } else {
+        grouped[category]!.add(task);
+      }
+    }
+
+    for (var list in grouped.values) {
+      list.sort((a, b) {
+        try {
+          final timeA = DateFormat("HH:mm:ss").parse(a["time"] ?? "00:00:00");
+          final timeB = DateFormat("HH:mm:ss").parse(b["time"] ?? "00:00:00");
+          return timeA.compareTo(timeB);
+        } catch (_) {
+          return 0;
+        }
+      });
+    }
+
+    return grouped;
+  }
+
   @override
   void initState() {
     super.initState();
@@ -1390,12 +1420,12 @@ class _ManagerScreenState extends State<ManagerScreen> {
                   await FirebaseFirestore.instance.collection("tasks").doc(taskID).update({
                     "catName": catNameController.text,
                     "task": taskNameController.text,
-                  "date": DateFormat('yyyy-MM-dd').format(selectedDate),
-                  "time": "${selectedTime.hour.toString().padLeft(2, '0')}:${selectedTime.minute.toString().padLeft(2, '0')}:00",
-                  "priority": selectedPriority,
-                  "assignee": selectedAssignee,
-                  "assistant1": selectedAssistant1,
-                  "assistant2": selectedAssistant2,
+                    "date": DateFormat('yyyy-MM-dd').format(selectedDate),
+                    "time": "${selectedTime.hour.toString().padLeft(2, '0')}:${selectedTime.minute.toString().padLeft(2, '0')}:00",
+                    "priority": selectedPriority,
+                    "assigned": selectedAssignee,
+                    "assistant1": selectedAssistant1,
+                    "assistant2": selectedAssistant2,
                   });
                   Navigator.pop(context);
                   ScaffoldMessenger.of(context).showSnackBar(
@@ -2155,6 +2185,8 @@ class _ManagerScreenState extends State<ManagerScreen> {
           return matchesCategory && matchesDate;
         }).toList();
 
+        final grouped = groupTasksByCategory(filteredTasks, categories);
+
         return Column(
           children: [
             Container(
@@ -2169,9 +2201,11 @@ class _ManagerScreenState extends State<ManagerScreen> {
               ),
             ),
             const SizedBox(height: 8),
-            Column(
-              children: filteredTasks.map((task) => _buildTaskRow(task, taskProvider, context)).toList(),
-            ),
+            ...grouped.entries.expand((entry) {
+              return [
+                ...entry.value.map((task) => _buildTaskRow(task, taskProvider, context))
+              ];
+            }).toList(),
           ],
         );
       },
@@ -2411,6 +2445,8 @@ class _ManagerScreenState extends State<ManagerScreen> {
           return matchesCategory && matchesStaff && matchesDate;
         }).toList();
 
+        final grouped = groupTasksByCategory(filteredTasks, categories);
+
         return Column(
           children: [
             Container(
@@ -2436,9 +2472,11 @@ class _ManagerScreenState extends State<ManagerScreen> {
               ),
             ),
             const SizedBox(height: 8),
-            Column(
-              children: filteredTasks.map((task) => _buildInProgressRow(task, taskProvider)).toList(),
-            ),
+            ...grouped.entries.expand((entry) {
+              return [
+                ...entry.value.map((task) => _buildInProgressRow(task, taskProvider))
+              ];
+            }).toList(),
           ],
         );
       },
@@ -2558,6 +2596,8 @@ class _ManagerScreenState extends State<ManagerScreen> {
           return matchesCategory && matchesStaff && matchesDate;
         }).toList();
 
+        final grouped = groupTasksByCategory(filteredTasks, categories);
+
         return Column(
           children: [
             Container(
@@ -2583,9 +2623,11 @@ class _ManagerScreenState extends State<ManagerScreen> {
               ),
             ),
             const SizedBox(height: 8),
-            Column(
-              children: filteredTasks.map((task) => _buildCompletedRow(task)).toList(),
-            ),
+              ...grouped.entries.expand((entry) {
+              return [  
+                ...entry.value.map((task) => _buildCompletedRow(task))
+              ];
+            }).toList(),
           ],
         );
       },
