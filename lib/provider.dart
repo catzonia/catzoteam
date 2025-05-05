@@ -67,12 +67,17 @@ class TaskProvider extends ChangeNotifier {
   void setBranchId(String newBranchId) {
     if (_branchId != newBranchId) {
       _branchId = newBranchId;
-      print('Branch updated to: $_branchId');
-      _fetchTasksFromFirestore();
-      _loadStaffNrics();
+
+      // Clear tasks immediately to prevent UI from showing wrong branch tasks
+      _availableTasks.clear();
+      _assignedTasks.clear();
+      _completedTasks.clear();
       WidgetsBinding.instance.addPostFrameCallback((_) {
         notifyListeners();
       });
+      
+      _fetchTasksFromFirestore();
+      _loadStaffNrics();
     }
   }
 

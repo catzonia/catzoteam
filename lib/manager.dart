@@ -297,6 +297,7 @@ class _ManagerScreenState extends State<ManagerScreen> {
     String? selectedSubtask;
     int basePoints = 0;
     final TextEditingController catNameController = TextEditingController();
+    final TextEditingController taskNameController = TextEditingController();
     final ValueNotifier<String?> taskNameNotifier = ValueNotifier<String?>(null);
     DateTime selectedDate = this.selectedDate;
     TimeOfDay selectedTime = TimeOfDay.now();
@@ -708,9 +709,12 @@ class _ManagerScreenState extends State<ManagerScreen> {
                           ValueListenableBuilder<String?>(
                             valueListenable: taskNameNotifier,
                             builder: (context, value, _) {
+                              if ((taskNameController.text.isEmpty || taskNameController.text == value) && value != null) {
+                                taskNameController.text = value;
+                              }
+                              
                               return TextField(
-                                readOnly: true,
-                                controller: TextEditingController(text: value ?? ""),
+                                controller: taskNameController,
                                 decoration: InputDecoration(
                                   hintText: value ?? "Enter task name",
                                   hintStyle: TextStyle(color: Colors.grey[400]),
@@ -1010,7 +1014,7 @@ class _ManagerScreenState extends State<ManagerScreen> {
 
                               final newTask = {
                                 "taskId": generatedTaskId,
-                                "taskName": value,
+                                "taskName": taskNameController.text,
                                 "catName": catNameController.text.isNotEmpty ? catNameController.text : null,
                                 "date": DateFormat('yyyy-MM-dd').format(selectedDate),
                                 "time": "${selectedTime.hour.toString().padLeft(2, '0')}:${selectedTime.minute.toString().padLeft(2, '0')}:00",
@@ -1032,7 +1036,7 @@ class _ManagerScreenState extends State<ManagerScreen> {
                                 await FirebaseFirestore.instance.collection('tasks').doc(generatedTaskId).set(newTask);
                                 taskProvider.addTask({
                                   "taskID": generatedTaskId,
-                                  "task": value,
+                                  "task": taskNameController.text,
                                   "orderID": null,
                                   "catName": catNameController.text,
                                   "points": points,
@@ -1410,8 +1414,41 @@ class _ManagerScreenState extends State<ManagerScreen> {
               ),
           actions: [
             TextButton(
-              onPressed: () => Navigator.pop(context),
-              child: const Text("Cancel"),
+              onPressed: () async {
+                final taskID = task["taskID"];
+                final confirm = await showDialog<bool>(
+                  context: context,
+                  builder: (context) => AlertDialog(
+                    title: const Text("Confirm Delete"),
+                    content: const Text("Are you sure you want to delete this task? This action cannot be undone."),
+                    actions: [
+                      TextButton(
+                        onPressed: () => Navigator.pop(context),
+                        child: const Text("Cancel"),
+                      ),
+                      TextButton(
+                        onPressed: () => Navigator.pop(context),
+                        child: const Text("Delete", style: TextStyle(color: Colors.red)),
+                      ),
+                    ],
+                  ),
+                );
+
+                if (confirm == true) {
+                  try {
+                    await FirebaseFirestore.instance.collection("tasks").doc(taskID).delete();
+                    Navigator.pop(context);
+                    ScaffoldMessenger.of(context).showSnackBar(
+                      const SnackBar(content: Text("Task deleted successfully."), backgroundColor: Colors.red),
+                    );
+                  } catch (e) {
+                    ScaffoldMessenger.of(context).showSnackBar(
+                      SnackBar(content: Text("Error deleting task: $e"), backgroundColor: Colors.red),
+                    );        
+                  }
+                }
+              },
+              child: const Text("Delete", style: TextStyle(color: Colors.red)),
             ),
             ElevatedButton(
               onPressed: () async {
@@ -1576,29 +1613,32 @@ class _ManagerScreenState extends State<ManagerScreen> {
     }
 
     final filteredUnassigned = taskProvider.availableTasks.where((task) {
+      final matchesBranch = task["taskID"]?.toString().contains(widget.selectedBranchCode) ?? false;
       final matchesCategory = _selectedCategoryFilters.isEmpty || _selectedCategoryFilters.contains(_getCategoryForTask(task));
       final matchesDate = isSameDate(task["date"]);
-      return matchesCategory && matchesDate;
+      return matchesBranch && matchesCategory && matchesDate;
     }).toList();
 
     final filteredInProgress = taskProvider.assignedTasks.where((task) {
+      final matchesBranch = task["taskID"]?.toString().contains(widget.selectedBranchCode) ?? false;
       final matchesCategory = _selectedCategoryFilters.isEmpty || _selectedCategoryFilters.contains(_getCategoryForTask(task));
       final matchesStaff = _selectedStaffFilters.isEmpty ||
         _selectedStaffFilters.contains(task["assignee"]) ||
         _selectedStaffFilters.contains(task["assistant1"]) ||
         _selectedStaffFilters.contains(task["assistant2"]);
       final matchesDate = isSameDate(task["date"]);
-      return matchesCategory && matchesStaff && matchesDate;
+      return matchesBranch && matchesCategory && matchesStaff && matchesDate;
     }).toList();
 
     final filteredCompleted = taskProvider.completedTasks.where((task) {
+      final matchesBranch = task["taskID"]?.toString().contains(widget.selectedBranchCode) ?? false;
       final matchesCategory = _selectedCategoryFilters.isEmpty || _selectedCategoryFilters.contains(_getCategoryForTask(task));
       final matchesStaff = _selectedStaffFilters.isEmpty ||
         _selectedStaffFilters.contains(task["assignee"]) ||
         _selectedStaffFilters.contains(task["assistant1"]) ||
         _selectedStaffFilters.contains(task["assistant2"]);
       final matchesDate = isSameDate(task["date"]);
-      return matchesCategory && matchesStaff && matchesDate;
+      return matchesBranch && matchesCategory && matchesStaff && matchesDate;
     }).toList();
 
     return SingleChildScrollView(

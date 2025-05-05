@@ -42,7 +42,10 @@ class _TeamScreenState extends State<TeamScreen> {
 
   Future<void> _fetchStaffMembers() async {
     try {
-      QuerySnapshot snapshot = await FirebaseFirestore.instance.collection('staff').where('branch', isEqualTo: widget.selectedBranchCode).get();
+      QuerySnapshot snapshot = await FirebaseFirestore.instance
+        .collection('staff')
+        .where('branch', isEqualTo: widget.selectedBranchCode)
+        .get();
 
       List<String> names = snapshot.docs.map((doc) {
         var data = doc.data() as Map<String, dynamic>;
@@ -110,7 +113,9 @@ class _TeamScreenState extends State<TeamScreen> {
 
         for (var task in taskProvider.displayedTasks.where((task) {
           final taskDateStr = task["date"]?.toString() ?? '';
-          return taskDateStr == todayStr;
+          final matchesDate = taskDateStr == todayStr;
+          final matchesBranch = task["taskID"]?.toString().contains(widget.selectedBranchCode) ?? false;
+          return matchesDate && matchesBranch;
         })) {
           String taskId = task["taskID"] ?? '';
           String initials = taskId.isNotEmpty && taskId.contains('_') ? taskId.split('_')[0] : '';
