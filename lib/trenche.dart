@@ -1,6 +1,7 @@
 import 'package:flutter/material.dart';
 import 'package:provider/provider.dart';
 import 'package:catzoteam/provider.dart';
+import 'package:catzoteam/widgets/section_box.dart';
 
 class TrencheScreen extends StatelessWidget {
   final List<Map<String, dynamic>> trenche = [
@@ -56,47 +57,13 @@ class TrencheScreen extends StatelessWidget {
         child: Column(
           crossAxisAlignment: CrossAxisAlignment.start,
           children: [
-            _buildSectionBox(
-              "Trenche",
-              Icons.bar_chart_rounded,
-              _buildTrencheContent(context),
-            ),
+            SectionBox(
+              title: "Trenche",
+              icon: Icons.bar_chart_rounded,
+              child: _buildTrencheContent(context),
+            )
           ],
         ),
-      ),
-    );
-  }
-
-  Widget _buildSectionBox(String title, IconData icon, Widget child) {
-    return Container(
-      padding: const EdgeInsets.all(20),
-      decoration: BoxDecoration(
-        color: Colors.white,
-        borderRadius: BorderRadius.circular(12),
-        boxShadow: const [
-          BoxShadow(color: Colors.black12, blurRadius: 5, spreadRadius: 1),
-        ],
-      ),
-      child: Column(
-        crossAxisAlignment: CrossAxisAlignment.start,
-        children: [
-          Row(
-            children: [
-              Icon(icon, color: Colors.orange),
-              const SizedBox(width: 8),
-              Text(
-                title,
-                style: const TextStyle(
-                  color: Colors.black,
-                  fontSize: 20,
-                  fontWeight: FontWeight.bold,
-                ),
-              ),
-            ],
-          ),
-          const SizedBox(height: 16),
-          child,
-        ],
       ),
     );
   }

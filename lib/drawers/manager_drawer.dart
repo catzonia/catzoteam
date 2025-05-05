@@ -1,6 +1,7 @@
 import 'package:flutter/material.dart';
 import 'package:provider/provider.dart';
 import 'package:catzoteam/provider.dart';
+import 'package:catzoteam/widgets/drawer_header.dart';
 
 class ManagerDrawer extends StatefulWidget {
   final int selectedIndex;
@@ -38,17 +39,7 @@ class _ManagerDrawerState extends State<ManagerDrawer> {
       child: ListView(
         padding: EdgeInsets.zero,
         children: [
-          const DrawerHeader(
-            child: Column(
-              crossAxisAlignment: CrossAxisAlignment.start,
-              mainAxisAlignment: MainAxisAlignment.center,
-              children: [
-                Text('CatzoTeam', style: TextStyle(color: Colors.orange, fontSize: 27, fontWeight: FontWeight.bold)),
-                SizedBox(height: 8),
-                Text('Manager Portal', style: TextStyle(color: Colors.grey, fontSize: 18)),
-              ],
-            ),
-          ),
+          CustomDrawerHeader(portalTitle: 'Manager Portal'),
           ListTile(
             leading: Icon(
               Icons.task_outlined,

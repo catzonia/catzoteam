@@ -5,6 +5,7 @@ import 'package:intl/intl.dart';
 import 'package:flutter_slidable/flutter_slidable.dart';
 import 'package:collection/collection.dart';
 import 'package:catzoteam/provider.dart';
+import 'package:catzoteam/widgets/painter.dart';
 import 'dart:math';
 
 class ManagerScreen extends StatefulWidget {
@@ -2764,61 +2765,5 @@ class _ManagerScreenState extends State<ManagerScreen> {
     Color color = category["color"] as Color;
     print('Task $taskId initials: $initials, color: $color');
     return color;
-  }
-}
-
-class DualProgressPainter extends CustomPainter {
-  final double completedPercentage;
-  final double inProgressPercentage;
-
-  DualProgressPainter({
-    required this.completedPercentage,
-    required this.inProgressPercentage,
-  });
-
-  @override
-  void paint(Canvas canvas, Size size) {
-    Paint backgroundPaint = Paint()
-      ..color = Colors.grey[300]!
-      ..style = PaintingStyle.fill;
-
-    Paint completedPaint = Paint()
-      ..color = Colors.green[700]!
-      ..style = PaintingStyle.fill;
-
-    Paint inProgressPaint = Paint()
-      ..color = Colors.yellow[700]!
-      ..style = PaintingStyle.fill;
-
-    canvas.drawRRect(
-      RRect.fromRectAndRadius(
-        Rect.fromLTWH(0, 0, size.width, size.height),
-        const Radius.circular(10),
-      ),
-      backgroundPaint,
-    );
-
-    double inProgressWidth = size.width * (completedPercentage + inProgressPercentage).clamp(0.0, 1.0);
-    canvas.drawRRect(
-      RRect.fromRectAndRadius(
-        Rect.fromLTWH(0, 0, inProgressWidth, size.height),
-        const Radius.circular(10),
-      ),
-      inProgressPaint,
-    );
-
-    double completedWidth = size.width * completedPercentage;
-    canvas.drawRRect(
-      RRect.fromRectAndRadius(
-        Rect.fromLTWH(0, 0, completedWidth, size.height),
-        const Radius.circular(10),
-      ),
-      completedPaint,
-    );
-  }
-
-  @override
-  bool shouldRepaint(DualProgressPainter oldDelegate) {
-    return oldDelegate.completedPercentage != completedPercentage || oldDelegate.inProgressPercentage != inProgressPercentage;
   }
 }

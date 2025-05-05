@@ -4,6 +4,7 @@ import 'package:provider/provider.dart';
 import 'package:lottie/lottie.dart';
 import 'package:cloud_firestore/cloud_firestore.dart';
 import 'package:catzoteam/provider.dart';
+import 'package:catzoteam/widgets/painter.dart';
 import 'package:intl/intl.dart';
 import 'dart:math';
 
@@ -1853,84 +1854,5 @@ class _OverviewScreenState extends State<OverviewScreen> with TickerProviderStat
         BoxShadow(color: Colors.black12, blurRadius: 5, spreadRadius: 1),
       ],
     );
-  }
-}
-
-class RoundedLinearProgressPainter extends CustomPainter {
-  final double progress;
-  final double inProgress;
-
-  RoundedLinearProgressPainter(this.progress, this.inProgress);
-
-  @override
-  void paint(Canvas canvas, Size size) {
-    Paint backgroundPaint = Paint()
-      ..color = Colors.black12
-      ..style = PaintingStyle.stroke
-      ..strokeWidth = size.height
-      ..strokeCap = StrokeCap.round;
-
-    Paint inProgressPaint = Paint()
-      ..color = Colors.orange[300]!
-      ..style = PaintingStyle.stroke
-      ..strokeWidth = size.height
-      ..strokeCap = StrokeCap.round;
-
-    Paint progressPaint = Paint()
-      ..shader = LinearGradient(
-        colors: [Colors.deepOrange[400]!, Colors.deepOrange[800]!],
-      ).createShader(Rect.fromLTWH(0, 0, size.width, size.height))
-      ..style = PaintingStyle.stroke
-      ..strokeWidth = size.height
-      ..strokeCap = StrokeCap.round;
-
-    Paint notchPaint = Paint()
-      ..color = Colors.orange[100]!.withOpacity(0.5)
-      ..style = PaintingStyle.fill;
-
-
-    // Draw background line
-    Offset startPoint = Offset(0, size.height / 2);
-    Offset endPoint = Offset(size.width, size.height / 2);
-    canvas.drawLine(startPoint, endPoint, backgroundPaint);
-
-    // Draw in-progress segment (behind actual progress)
-    if (inProgress > 0) {
-      double inProgressEnd = (progress + inProgress).clamp(0.0, 1.0);
-      canvas.drawLine(
-        Offset(size.width * progress, size.height / 2),
-        Offset(size.width * inProgressEnd, size.height / 2),
-        inProgressPaint,
-      );
-    }
-
-    // Draw completed segment
-    if (progress > 0) {
-      canvas.drawLine(startPoint, Offset(size.width * progress, size.height / 2), progressPaint);
-    }
-
-    // Draw milestone notches
-    const double maxPoints = 85;
-    const List<double> milestonePoints = [45, 55, 65, 75];
-    List<double> milestoneFractions = milestonePoints.map((point) => point / maxPoints).toList();
-
-    double notchWidth = 2.5;
-    double notchHeight = size.height;
-
-    for (double fraction in milestoneFractions) {
-      double milestoneX = fraction * size.width;
-      Rect notchRect = Rect.fromLTWH(
-        milestoneX - notchWidth / 2,
-        0,
-        notchWidth,
-        notchHeight,
-      );
-      canvas.drawRect(notchRect, notchPaint);
-    }
-  }
-
-  @override
-  bool shouldRepaint(RoundedLinearProgressPainter oldDelegate) {
-    return oldDelegate.progress != progress;
   }
 }

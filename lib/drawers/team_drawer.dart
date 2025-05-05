@@ -1,4 +1,5 @@
 import 'package:flutter/material.dart';
+import 'package:catzoteam/widgets/drawer_header.dart';
 
 class TeamDrawer extends StatefulWidget {
   final int selectedIndex;
@@ -36,17 +37,7 @@ class _TeamDrawerState extends State<TeamDrawer> {
       child: ListView(
         padding: EdgeInsets.zero,
         children: [
-          const DrawerHeader(
-            child: Column(
-              crossAxisAlignment: CrossAxisAlignment.start,
-              mainAxisAlignment: MainAxisAlignment.center,
-              children: [
-                Text('CatzoTeam', style: TextStyle(color: Colors.orange, fontSize: 27, fontWeight: FontWeight.bold)),
-                SizedBox(height: 8),
-                Text('Team Portal', style: TextStyle(color: Colors.grey, fontSize: 18)),
-              ],
-            ),
-          ),
+          CustomDrawerHeader(portalTitle: 'Team Portal'),
           ListTile(
             leading: Icon(
               Icons.task_outlined,

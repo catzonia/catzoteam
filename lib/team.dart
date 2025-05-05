@@ -2,6 +2,8 @@ import 'package:flutter/material.dart';
 import 'package:provider/provider.dart';
 import 'package:cloud_firestore/cloud_firestore.dart';
 import 'package:catzoteam/provider.dart';
+import 'package:catzoteam/widgets/section_box.dart';
+import 'package:catzoteam/widgets/task_card.dart';
 import 'package:intl/intl.dart';
 class TeamScreen extends StatefulWidget {
   final String selectedBranchCode;
@@ -73,31 +75,14 @@ class _TeamScreenState extends State<TeamScreen> {
           child: Column(
             crossAxisAlignment: CrossAxisAlignment.start,
             children: [
-              _buildSectionBox("Available Tasks", Icons.folder_open_rounded, _buildTaskRow()),
+              SectionBox(
+                title: "Available Tasks",
+                icon: Icons.folder_open_rounded,
+                child: _buildTaskRow(),
+              )
             ],
           ),
         ),
-      ),
-    );
-  }
-
-  Widget _buildSectionBox(String title, IconData icon, Widget child) {
-    return Container(
-      padding: const EdgeInsets.all(20),
-      decoration: BoxDecoration(color: Colors.white, borderRadius: BorderRadius.circular(20), boxShadow: const [BoxShadow(color: Colors.black12, blurRadius: 10, spreadRadius: 2, offset: Offset(0, 4))]),
-      child: Column(
-        crossAxisAlignment: CrossAxisAlignment.start,
-        children: [
-          Row(
-            children: [
-              Icon(icon, color: Colors.orange, size: 28),
-              const SizedBox(width: 12),
-              Expanded(child: Text(title, style: const TextStyle(fontSize: 20, fontWeight: FontWeight.bold, color: Colors.black87), overflow: TextOverflow.ellipsis)),
-            ],
-          ),
-          const SizedBox(height: 20),
-          child,
-        ],
       ),
     );
   }
@@ -186,7 +171,11 @@ class _TeamScreenState extends State<TeamScreen> {
                   final taskSlice = tasks.sublist(start, end);
 
                   return Column(
-                    children: taskSlice.map((task) => _buildTaskCard(task)).toList(),
+                    children: taskSlice.map((task) => TaskCard(
+                                task: task,
+                                staffMembers: staffMembers,
+                                isLoadingStaff: _isLoadingStaff,
+                              )).toList(),
                   );
                 },
               ),
@@ -215,132 +204,6 @@ class _TeamScreenState extends State<TeamScreen> {
                 }),
               ),
             ),
-        ],
-      ),
-    );
-  }
-
-  Widget _buildTaskCard(Map<String, dynamic> task) {
-    String priority = task["priority"] ?? "no";
-    bool isPriority = priority == "high";
-    Color priorityColor;
-    IconData priorityIcon;
-    switch (priority) {
-      case "high":
-        priorityColor = Colors.red[700]!;
-        priorityIcon = Icons.flag_rounded;
-        break;
-      default:
-        priorityColor = Colors.grey[700]!;
-        priorityIcon = Icons.outlined_flag_rounded;
-    }
-
-    return Container(
-      margin: const EdgeInsets.only(bottom: 8),
-      padding: const EdgeInsets.all(12),
-      decoration: BoxDecoration(color: Colors.white, borderRadius: BorderRadius.circular(15), boxShadow: const [BoxShadow(color: Colors.black12, blurRadius: 8, spreadRadius: 2, offset: Offset(0, 4))]),
-      child: Column(
-        crossAxisAlignment: CrossAxisAlignment.start,
-        children: [
-          Row(
-            mainAxisAlignment: MainAxisAlignment.spaceBetween,
-            children: [
-              Expanded(
-                child: Text(
-                  task["title"] ?? "Unknown Task",
-                  style: const TextStyle(fontWeight: FontWeight.bold, fontSize: 16, color: Colors.black87),
-                  maxLines: 2,
-                  overflow: TextOverflow.ellipsis,
-                ),
-              ),
-              if (isPriority) 
-                Icon(priorityIcon, color: priorityColor, size: 20),
-            ],
-          ),
-          const SizedBox(height: 6),
-          if ((task["name"] ?? '').toString().trim().isNotEmpty &&
-          task["name"].toString().trim() != '-')
-          Text(
-            task["name"],
-            style: const TextStyle(color: Colors.black54, fontSize: 14, fontStyle: FontStyle.italic),
-            maxLines: 1,
-            overflow: TextOverflow.ellipsis,
-          ),
-          const SizedBox(height: 8),
-          Row(
-            mainAxisAlignment: MainAxisAlignment.spaceBetween,
-            crossAxisAlignment: CrossAxisAlignment.center,
-            children: [
-              Row(
-                children: [
-                  Container(
-                    padding: const EdgeInsets.symmetric(horizontal: 8, vertical: 4),
-                    decoration: BoxDecoration(color: Colors.green[50], borderRadius: BorderRadius.circular(10)),
-                    child: Text("${task["points"] ?? 0} pts", style: const TextStyle(color: Colors.green, fontSize: 12, fontWeight: FontWeight.bold), overflow: TextOverflow.ellipsis),
-                  ),
-                  const SizedBox(width: 3),
-                  Consumer<TaskProvider>(
-                    builder: (context, taskProvider, child) {
-                      return IconButton(
-                        icon: Icon(Icons.person_add_rounded, color: Colors.green[600], size: 20),
-                        padding: EdgeInsets.zero,
-                        constraints: const BoxConstraints(),
-                        onPressed: () {
-                          showDialog(
-                            context: context,
-                            builder: (dialogContext) => AlertDialog(
-                              shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(20)),
-                              title: const Text("Select Staff", style: TextStyle(fontWeight: FontWeight.bold)),
-                              content: SizedBox(
-                                width: 300,
-                                child: _isLoadingStaff
-                                    ? const Center(child: CircularProgressIndicator())
-                                    : ListView.builder(
-                                        shrinkWrap: true,
-                                        itemCount: staffMembers.length,
-                                        itemBuilder: (context, index) {
-                                          return ListTile(
-                                            title: Text(staffMembers[index], overflow: TextOverflow.ellipsis),
-                                            onTap: () {
-                                              final taskToAssign = taskProvider.availableTasks.firstWhere(
-                                                (t) => t["taskID"] == task["taskID"],
-                                                orElse: () => throw Exception("Task not found"),
-                                              );
-                                              taskProvider.assignTask(taskToAssign, staffMembers[index]);
-                                              Navigator.pop(dialogContext);
-                                              ScaffoldMessenger.of(dialogContext).showSnackBar(
-                                                SnackBar(
-                                                  content: Text("Task '${task["title"]}' assigned to ${staffMembers[index]}."),
-                                                  backgroundColor: Colors.orange,
-                                                ),
-                                              );
-                                            },
-                                          );
-                                        },
-                                      ),
-                              ),
-                              actions: [
-                                TextButton(
-                                  onPressed: () => Navigator.pop(dialogContext),
-                                  child: const Text("Cancel", style: TextStyle(color: Colors.grey)),
-                                ),
-                              ],
-                            ),
-                          );
-                        },
-                      );
-                    },
-                  ),
-                ],
-              ),
-              Expanded(
-                child: Align(
-                  alignment: Alignment.centerRight,
-                  child: Text(task["taskID"], style: const TextStyle(color: Colors.black54, fontSize: 12), overflow: TextOverflow.ellipsis),
-                ),
-              ),
-            ],
-          ),
         ],
       ),
     );

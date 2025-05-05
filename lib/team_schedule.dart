@@ -1,6 +1,7 @@
 import 'package:flutter/material.dart';
 import 'package:intl/intl.dart';
 import 'package:cloud_firestore/cloud_firestore.dart';
+import 'package:catzoteam/widgets/section_box.dart';
 import 'package:provider/provider.dart';
 import 'provider.dart'; 
 
@@ -181,51 +182,15 @@ class _TeamScheduleScreenState extends State<TeamScheduleScreen> {
         child: Column(
           crossAxisAlignment: CrossAxisAlignment.start,
           children: [
-            _buildSectionBox("Schedule", Icons.calendar_today_rounded, 
-              _isLoading 
+            SectionBox(
+              title: "Schedule", 
+              icon: Icons.calendar_today_rounded, 
+              child: _isLoading 
                 ? const Center(child: CircularProgressIndicator())
                 : _buildCalendar(_selectedMonth, secondMonth)
             ),
           ],
         ),
-      ),
-    );
-  }
-
-  Widget _buildSectionBox(String title, IconData icon, Widget child) {
-    return Container(
-      padding: const EdgeInsets.all(20),
-      decoration: BoxDecoration(
-        gradient: LinearGradient(
-          colors: [Colors.white, Colors.grey[100]!],
-          begin: Alignment.topLeft,
-          end: Alignment.bottomRight,
-        ),
-        borderRadius: BorderRadius.circular(20),
-        boxShadow: const [
-          BoxShadow(color: Colors.black12, blurRadius: 10, spreadRadius: 2, offset: Offset(0, 4)),
-        ],
-      ),
-      child: Column(
-        crossAxisAlignment: CrossAxisAlignment.start,
-        children: [
-          Row(
-            children: [
-              Icon(icon, color: Colors.orange, size: 28),
-              const SizedBox(width: 12),
-              Text(
-                title,
-                style: const TextStyle(
-                  fontSize: 20, 
-                  fontWeight: FontWeight.bold, 
-                  color: Colors.black87
-                ),
-              ),
-            ],
-          ),
-          const SizedBox(height: 20),
-          child,
-        ],
       ),
     );
   }
