@@ -4,6 +4,7 @@ import 'package:cloud_firestore/cloud_firestore.dart';
 import 'package:catzoteam/provider.dart';
 import 'package:catzoteam/widgets/section_box.dart';
 import 'package:catzoteam/widgets/task_card.dart';
+import 'package:catzoteam/models/task_category.dart'; 
 import 'package:intl/intl.dart';
 class TeamScreen extends StatefulWidget {
   final String selectedBranchCode;
@@ -18,12 +19,14 @@ class _TeamScreenState extends State<TeamScreen> {
   List<String> staffMembers = [];
   bool _isLoadingStaff = true;
 
-  final List<Map<String, dynamic>> categories = [
-    {"title": "Grooming", "color": Colors.orange[700], "initials": "GR", "tasks": <Map<String, dynamic>>[]},
-    {"title": "Sales & Booking", "color": Colors.orange[500], "initials": "SB", "tasks": <Map<String, dynamic>>[]},
-    {"title": "Media & Marketing", "color": Colors.orange[300], "initials": "MM", "tasks": <Map<String, dynamic>>[]},
-    {"title": "Housekeeping & General", "color": Colors.orange[100], "initials": "HG", "tasks": <Map<String, dynamic>>[]},
-  ];
+  final List<Map<String, dynamic>> categories = kTaskCategories.map((cat) {
+    return {
+      "title": cat.title,
+      "initials": cat.initials,
+      "color": cat.color,
+      "tasks": <Map<String, dynamic>>[],
+    };
+  }).toList();
 
   final Map<String, PageController> _pageControllers = {};
   final Map<String, int> _currentPages = {};

@@ -5,7 +5,9 @@ import 'package:intl/intl.dart';
 import 'package:flutter_slidable/flutter_slidable.dart';
 import 'package:collection/collection.dart';
 import 'package:catzoteam/provider.dart';
-import 'package:catzoteam/widgets/painter.dart';
+import 'package:catzoteam/models/painter.dart';
+import 'package:catzoteam/widgets/staff_selector_dialog.dart';
+import 'package:catzoteam/models/task_category.dart'; 
 import 'dart:math';
 
 class ManagerScreen extends StatefulWidget {
@@ -39,12 +41,14 @@ class _ManagerScreenState extends State<ManagerScreen> {
     return (text.isEmpty || text == "none") ? "-" : value;
   }
 
-  final List<Map<String, dynamic>> categories = [
-    {"title": "Grooming", "value": "grooming", "color": Colors.orange[700], "initials": "GR"},
-    {"title": "Sales & Booking", "value": "salesBooking", "color": Colors.orange[500], "initials": "SB"},
-    {"title": "Media & Marketing", "value": "mediaMarketing", "color": Colors.orange[300], "initials": "MM"},
-    {"title": "Housekeeping & General", "value": "housekeepingGeneral", "color": Colors.orange[100], "initials": "HG"},
-  ];
+  final List<Map<String, dynamic>> categories = kTaskCategories.map((cat) {
+    return {
+      "title": cat.title,
+      "initials": cat.initials,
+      "color": cat.color,
+      "tasks": <Map<String, dynamic>>[],
+    };
+  }).toList();
 
   Map<String, List<Map<String, dynamic>>> groupTasksByCategory(List<Map<String, dynamic>> tasks, List<Map<String, dynamic>> categories) {
     final Map<String, List<Map<String, dynamic>>> grouped = {
@@ -207,6 +211,7 @@ class _ManagerScreenState extends State<ManagerScreen> {
       ),
     );
 
+    if (!mounted) return;
     Overlay.of(context, rootOverlay: true).insert(_futurePopup!);
   }
 
@@ -286,7 +291,7 @@ class _ManagerScreenState extends State<ManagerScreen> {
     String initials = parts[0];
     var category = categories.firstWhere(
       (cat) => cat["initials"] == initials,
-      orElse: () => {"title": "Unknown"},
+      orElse: () => <String, Object>{"title": "Unknown"},
     );
     return category["title"] as String;
   }
@@ -1457,7 +1462,7 @@ class _ManagerScreenState extends State<ManagerScreen> {
                   final taskID = task["taskID"];
                   await FirebaseFirestore.instance.collection("tasks").doc(taskID).update({
                     "catName": catNameController.text,
-                    "task": taskNameController.text,
+                    "taskName": taskNameController.text,
                     "date": DateFormat('yyyy-MM-dd').format(selectedDate),
                     "time": "${selectedTime.hour.toString().padLeft(2, '0')}:${selectedTime.minute.toString().padLeft(2, '0')}:00",
                     "priority": selectedPriority,
@@ -2395,51 +2400,37 @@ class _ManagerScreenState extends State<ManagerScreen> {
                       padding: EdgeInsets.zero,
                       constraints: BoxConstraints(),
                       onPressed: () {
-                        showDialog(
-                          context: context,
-                          builder: (context) => AlertDialog(
-                            shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(20)),
-                            title: const Text("Select Staff", style: TextStyle(fontWeight: FontWeight.bold)),
-                            content: SizedBox(
-                              width: 300,
-                              child: _isLoadingStaff
-                                  ? const Center(child: CircularProgressIndicator())
-                                  : ListView.builder(
-                                      shrinkWrap: true,
-                                      itemCount: staffMembers.length,
-                                      itemBuilder: (context, index) {
-                                        return ListTile(
-                                          title: Text(staffMembers[index]),
-                                          onTap: () async {
-                                            try {
-                                              await taskProvider.assignTask(task, staffMembers[index]);
-                                              Navigator.pop(context);
-                                              ScaffoldMessenger.of(context).showSnackBar(
-                                                SnackBar(
-                                                  content: Text("Task '${task["task"]}' assigned to ${staffMembers[index]}."),
-                                                  backgroundColor: Colors.orange,
-                                                ),
-                                              );
-                                            } catch (e) {
-                                              ScaffoldMessenger.of(context).showSnackBar(
-                                                SnackBar(
-                                                  content: Text("Failed to assign task: $e"),
-                                                  backgroundColor: Colors.red,
-                                                ),
-                                              );
-                                            }
-                                          },
-                                        );
-                                      },
-                                    ),
+                        if (_isLoadingStaff) {
+                          ScaffoldMessenger.of(context).showSnackBar(
+                            const SnackBar(
+                              content: Text("Staff list is still loading..."),
+                              backgroundColor: Colors.orange,
                             ),
-                            actions: [
-                              TextButton(
-                                onPressed: () => Navigator.pop(context),
-                                child: const Text("Cancel", style: TextStyle(color: Colors.grey)),
-                              ),
-                            ],
-                          ),
+                          );
+                          return;
+                        }
+                        showStaffSelectorDialog(
+                          context: context,
+                          staffList: staffMembers,
+                          onSelected: (selectedStaff) async {
+                            try {
+                              await taskProvider.assignTask(task, selectedStaff);
+                              ScaffoldMessenger.of(context).showSnackBar(
+                                SnackBar(
+                                  content: Text("Task '${task["task"]}' assigned to $selectedStaff."),
+                                  backgroundColor: Colors.orange,
+                                ),
+                              );
+                            } catch (e) {
+                              ScaffoldMessenger.of(context).showSnackBar(
+                                SnackBar(
+                                  content: Text("Failed to assign task: $e"),
+                                  backgroundColor: Colors.red,
+                                ),
+                              );
+                            }
+                          },
+                          title: "Assign Task",
                         );
                       },
                     ),
@@ -2760,7 +2751,7 @@ class _ManagerScreenState extends State<ManagerScreen> {
     String initials = parts[0];
     var category = categories.firstWhere(
       (cat) => cat["initials"] == initials,
-      orElse: () => {"color": Colors.grey[300]},
+      orElse: () => <String, Object>{"color": Colors.grey[300]!},
     );
     Color color = category["color"] as Color;
     print('Task $taskId initials: $initials, color: $color');

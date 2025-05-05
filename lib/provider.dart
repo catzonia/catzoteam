@@ -9,7 +9,6 @@ class TaskProvider extends ChangeNotifier {
   List<Map<String, dynamic>> _availableTasks = [];
   List<Map<String, dynamic>> _assignedTasks = [];
   List<Map<String, dynamic>> _completedTasks = [];
-  List<Map<String, dynamic>> _leaveApplications = [];
   List<Map<String, dynamic>> _clockRecords = [];
 
   Map<DateTime, List<String>> _staffSchedule = {};
@@ -358,7 +357,6 @@ class TaskProvider extends ChangeNotifier {
   List<Map<String, dynamic>> get assignedTasks => _assignedTasks;
   List<Map<String, dynamic>> get completedTasks => _completedTasks;
   List<Map<String, dynamic>> get displayedTasks => _availableTasks.where((task) => task["displayed"] == true).toList();
-  List<Map<String, dynamic>> get leaveApplications => _leaveApplications;
   List<Map<String, dynamic>> get clockRecords => _clockRecords;
   Map<DateTime, List<String>> get staffSchedule => _staffSchedule;
   Map<DateTime, List<String>> get staffStandbySchedule => _staffStandbySchedule;
@@ -572,68 +570,6 @@ class TaskProvider extends ChangeNotifier {
       standbyStaff = standbyStaff.where((staff) => staff != excludeStaff).toList();
     }
     return standbyStaff;
-  }
-
-  Future<void> submitLeaveApplication(Map<String, dynamic> application) async {
-    String applicant = application['userRole'] == 'staff' ? application['applicant'] : "Manager Name";
-    application['applicant'] = applicant;
-    _leaveApplications.add(application);
-    notifyListeners();
-
-    try {
-      final branchCode = _branchId;
-      final now = DateTime.now();
-      final monthName = DateFormat('MMMM').format(now);
-      final nric = _staffNrics[applicant] ?? 'unknown';
-      if (nric == 'unknown') {
-        print('Cannot submit leave: NRIC not found for $applicant');
-        return;
-      }
-
-      final docRef = FirebaseFirestore.instance
-          .collection('leave')
-          .doc(branchCode)
-          .collection(monthName)
-          .doc(nric);
-
-      await docRef.set(application);
-
-      final replacements = Map<String, dynamic>.from(application['replacements']);
-      for (var entry in replacements.entries) {
-        final date = DateTime.parse(entry.key);
-        final replacement = entry.value;
-        final dateStr = DateFormat('yyyy-MM-dd').format(date);
-        final yearMonth = DateFormat('yyyy-MM').format(date);
-
-        await FirebaseFirestore.instance.collection('schedules').add({
-          'branchId': _branchId,
-          'staffName': applicant,
-          'shift': 'Day Off',
-          'date': dateStr,
-          'yearMonth': yearMonth,
-        });
-
-        if (replacement != null && replacement.trim().isNotEmpty && replacement != 'none') {
-          await FirebaseFirestore.instance.collection('schedules').add({
-            'branchId': _branchId,
-            'staffName': replacement,
-            'shift': 'Full Day',
-            'date': dateStr,
-            'yearMonth': yearMonth,
-            'replacedFor': applicant,
-          });
-        }
-      }
-
-      print('Leave application and schedule update completed for $applicant.');
-    } catch (e) {
-      print('Error in submitLeaveApplication: $e');
-      rethrow;
-    }
-  }
-
-  List<Map<String, dynamic>> getUserLeaveApplications(String userName) {
-    return _leaveApplications.where((app) => app['applicant'] == userName).toList();
   }
 
   void _checkAndResetPoints(String staff) async {

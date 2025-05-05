@@ -4,7 +4,8 @@ import 'package:provider/provider.dart';
 import 'package:lottie/lottie.dart';
 import 'package:cloud_firestore/cloud_firestore.dart';
 import 'package:catzoteam/provider.dart';
-import 'package:catzoteam/widgets/painter.dart';
+import 'package:catzoteam/models/painter.dart';
+import 'package:catzoteam/models/task_category.dart'; 
 import 'package:intl/intl.dart';
 import 'dart:math';
 
@@ -36,12 +37,14 @@ class _OverviewScreenState extends State<OverviewScreen> with TickerProviderStat
     85: {"icon": Icons.emoji_events, "color": Colors.deepPurple, "label": "Champion Badge"},
   };
 
-  final List<Map<String, dynamic>> categories = [
-    {"title": "Grooming", "color": Colors.orange[700], "initials": "GR"},
-    {"title": "Sales & Booking", "color": Colors.orange[500], "initials": "SB"},
-    {"title": "Media & Marketing", "color": Colors.orange[300], "initials": "MM"},
-    {"title": "Housekeeping & General", "color": Colors.orange[100], "initials": "HG"},
-  ];
+  final List<Map<String, dynamic>> categories = kTaskCategories.map((cat) {
+    return {
+      "title": cat.title,
+      "initials": cat.initials,
+      "color": cat.color,
+      "tasks": <Map<String, dynamic>>[],
+    };
+  }).toList();
 
   PageController _incompleteController = PageController();
   int _incompletePage = 0;
@@ -522,7 +525,7 @@ class _OverviewScreenState extends State<OverviewScreen> with TickerProviderStat
                     );
                   }).toList(),
 
-                  // ⚠️ Add warning icons here
+                  // Warning icons
                   ..._triggeredWarnings.map((milestone) {
                     return Positioned(
                       left: (availableWidth * (milestone / maxPoints)) - 20,
@@ -1839,7 +1842,7 @@ class _OverviewScreenState extends State<OverviewScreen> with TickerProviderStat
     String initials = parts[0];
     var category = categories.firstWhere(
       (cat) => cat["initials"] == initials,
-      orElse: () => {"color": Colors.grey[300]},
+      orElse: () => <String, Object>{"color": Colors.grey[300]!},
     );
     Color color = category["color"] as Color;
     print('Task $taskId initials: $initials, color: $color');

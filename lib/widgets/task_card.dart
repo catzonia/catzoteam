@@ -1,6 +1,7 @@
 import 'package:flutter/material.dart';
 import 'package:provider/provider.dart';
 import 'package:catzoteam/provider.dart';
+import 'package:catzoteam/widgets/staff_selector_dialog.dart';
 
 class TaskCard extends StatelessWidget {
   final Map<String, dynamic> task;
@@ -102,48 +103,24 @@ class TaskCard extends StatelessWidget {
                     padding: EdgeInsets.zero,
                     constraints: const BoxConstraints(),
                     onPressed: () {
-                      showDialog(
+                      showStaffSelectorDialog(
                         context: context,
-                        builder: (dialogContext) => AlertDialog(
-                          shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(20)),
-                          title: const Text("Select Staff", style: TextStyle(fontWeight: FontWeight.bold)),
-                          content: SizedBox(
-                            width: 300,
-                            child: isLoadingStaff
-                                ? const Center(child: CircularProgressIndicator())
-                                : ListView.builder(
-                                    shrinkWrap: true,
-                                    itemCount: staffMembers.length,
-                                    itemBuilder: (context, index) {
-                                      return ListTile(
-                                        title: Text(staffMembers[index], overflow: TextOverflow.ellipsis),
-                                        onTap: () {
-                                          final taskToAssign = taskProvider.availableTasks.firstWhere(
-                                            (t) => t["taskID"] == task["taskID"],
-                                            orElse: () => throw Exception("Task not found"),
-                                          );
-                                          taskProvider.assignTask(taskToAssign, staffMembers[index]);
-                                          Navigator.pop(dialogContext);
-                                          ScaffoldMessenger.of(context).showSnackBar(
-                                            SnackBar(
-                                              content: Text("Assigned to ${staffMembers[index]}"),
-                                              backgroundColor: Colors.green[600],
-                                            ),
-                                          );
-                                        },
-                                      );
-                                    },
-                                  ),
-                          ),
-                          actions: [
-                            TextButton(
-                              onPressed: () => Navigator.pop(dialogContext),
-                              child: const Text("Cancel"),
-                            )
-                          ],
-                        ),
+                        staffList: staffMembers,
+                        onSelected: (selectedStaff) {
+                          final taskToAssign = taskProvider.availableTasks.firstWhere(
+                            (t) => t["taskID"] == task["taskID"],
+                            orElse: () => throw Exception("Task not found"),
+                          );
+                          taskProvider.assignTask(taskToAssign, selectedStaff);
+                          ScaffoldMessenger.of(context).showSnackBar(
+                            SnackBar(
+                              content: Text("Assigned to $selectedStaff"),
+                              backgroundColor: Colors.green[600],
+                            ),
+                          );
+                        },
                       );
-                    },
+                    }
                   );
                 },
               )

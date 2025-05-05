@@ -15,14 +15,14 @@ class RoundedLinearProgressPainter extends CustomPainter {
       ..strokeCap = StrokeCap.round;
 
     Paint inProgressPaint = Paint()
-      ..color = Colors.orange[300]!
+      ..color = Colors.yellow[700]!
       ..style = PaintingStyle.stroke
       ..strokeWidth = size.height
       ..strokeCap = StrokeCap.round;
 
     Paint progressPaint = Paint()
       ..shader = LinearGradient(
-        colors: [Colors.deepOrange[400]!, Colors.deepOrange[800]!],
+        colors: [Colors.green, Colors.green[800]!],
       ).createShader(Rect.fromLTWH(0, 0, size.width, size.height))
       ..style = PaintingStyle.stroke
       ..strokeWidth = size.height
