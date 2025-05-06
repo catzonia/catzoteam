@@ -336,6 +336,77 @@ class _OverviewScreenState extends State<OverviewScreen> with TickerProviderStat
                         ],
                       ),
                       const SizedBox(height: 8),
+                      // Warning Icons
+                      if (_triggeredWarnings.isNotEmpty)
+                        LayoutBuilder(
+                          builder: (context, constraints) {
+                            double availableWidth = constraints.maxWidth;
+                            const double maxPoints = 85; // Same as in _buildDailyProgressBar
+                            return SizedBox(
+                              height: 36, // Height of the warning icons
+                              width: double.infinity,
+                              child: Stack(
+                                children: _triggeredWarnings.map((milestone) {
+                                  // Calculate the position of the milestone relative to the progress bar width
+                                  double fraction = milestone / maxPoints;
+                                  double leftPosition = fraction * availableWidth - 18; // Center the icon (36/2 = 18)
+
+                                  return Positioned(
+                                    left: leftPosition.clamp(0, availableWidth - 36), // Ensure it stays within bounds
+                                    child: GestureDetector(
+                                      onTap: () => _showWarningPopup(milestone),
+                                      child: AnimatedBuilder(
+                                        animation: _warningAnimController,
+                                        builder: (context, child) {
+                                          final jitter = _random.nextDouble() * 0.05;
+                                          return Transform.scale(
+                                            scale: _warningScaleAnimation.value + jitter,
+                                            child: Opacity(
+                                              opacity: _warningOpacityAnimation.value,
+                                              child: Stack(
+                                                children: [
+                                                  Container(
+                                                    width: 36,
+                                                    height: 36,
+                                                    decoration: BoxDecoration(
+                                                      color: Colors.red.withOpacity(0.3),
+                                                      shape: BoxShape.circle,
+                                                    ),
+                                                  ),
+                                                  Container(
+                                                    width: 36,
+                                                    height: 36,
+                                                    decoration: BoxDecoration(
+                                                      gradient: const RadialGradient(
+                                                        colors: [Color(0xFFFF5252), Color(0xFFD32F2F)],
+                                                        center: Alignment.center,
+                                                        radius: 0.8,
+                                                      ),
+                                                      shape: BoxShape.circle,
+                                                      boxShadow: [
+                                                        BoxShadow(
+                                                          color: Colors.red.withOpacity(0.4),
+                                                          blurRadius: 8,
+                                                          offset: const Offset(0, 4),
+                                                        ),
+                                                      ],
+                                                    ),
+                                                    child: const Icon(Icons.warning_amber_rounded, color: Colors.white, size: 20),
+                                                  ),
+                                                ],
+                                              ),
+                                            ),
+                                          );
+                                        },
+                                      ),
+                                    ),
+                                  );
+                                }).toList(),
+                              ),
+                            );
+                          },
+                        ),
+                      const SizedBox(height: 8),
                       _buildDailyProgressBar(dailyPoints, targetPoints),
                       const SizedBox(height: 16),
                       const Text(
@@ -524,61 +595,6 @@ class _OverviewScreenState extends State<OverviewScreen> with TickerProviderStat
                       ),
                     );
                   }).toList(),
-
-                  // Warning icons
-                  ..._triggeredWarnings.map((milestone) {
-                    return Positioned(
-                      left: (availableWidth * (milestone / maxPoints)) - 20,
-                      top: -30,
-                      child: GestureDetector(
-                        onTap: () => _showWarningPopup(milestone),
-                        child: AnimatedBuilder(
-                          animation: _warningAnimController,
-                          builder: (context, child) {
-                            final jitter = _random.nextDouble() * 0.05;
-                            return Transform.scale(
-                              scale: _warningScaleAnimation.value + jitter,
-                              child: Opacity(
-                                opacity: _warningOpacityAnimation.value,
-                                child: Stack(
-                                  children: [
-                                    Container(
-                                      width: 36,
-                                      height: 36,
-                                      decoration: BoxDecoration(
-                                        color: Colors.red.withOpacity(0.3),
-                                        shape: BoxShape.circle,
-                                      ),
-                                    ),
-                                    Container(
-                                      width: 36,
-                                      height: 36,
-                                      decoration: BoxDecoration(
-                                        gradient: const RadialGradient(
-                                          colors: [Color(0xFFFF5252), Color(0xFFD32F2F)],
-                                          center: Alignment.center,
-                                          radius: 0.8,
-                                        ),
-                                        shape: BoxShape.circle,
-                                        boxShadow: [
-                                          BoxShadow(
-                                            color: Colors.red.withOpacity(0.4),
-                                            blurRadius: 8,
-                                            offset: const Offset(0, 4),
-                                          ),
-                                        ],
-                                      ),
-                                      child: const Icon(Icons.warning_amber_rounded, color: Colors.white, size: 20),
-                                    ),
-                                  ],
-                                ),
-                              ),
-                            );
-                          },
-                        ),
-                      ),
-                    );
-                  }).toList(),
                 ],
               ),
             );
@@ -738,101 +754,6 @@ class _OverviewScreenState extends State<OverviewScreen> with TickerProviderStat
       },
     );
   }
-
-  // void _showTrencheSelectionDialog(BuildContext context, TaskProvider taskProvider) {
-  //   final List<String> trencheOptions = ["35", "40", "45", "50", "55", "60"];
-  //   String? selectedTrenche = taskProvider.getSelectedTrenche(widget.userName);
-
-  //   showDialog(
-  //     context: context,
-  //     builder: (context) {
-  //       return AlertDialog(
-  //         shape: RoundedRectangleBorder(
-  //           borderRadius: BorderRadius.circular(20),
-  //         ),
-  //         backgroundColor: Colors.white,
-  //         title: const Text(
-  //           "Select Trenche for the Month",
-  //           style: TextStyle(
-  //             fontSize: 20,
-  //             fontWeight: FontWeight.bold,
-  //             color: Colors.black87,
-  //           ),
-  //         ),
-  //         content: StatefulBuilder(
-  //           builder: (BuildContext context, StateSetter setState) {
-  //             return SizedBox(
-  //               width: 300,
-  //               child: Column(
-  //                 mainAxisSize: MainAxisSize.min,
-  //                 children: [
-  //                   DropdownButton<String>(
-  //                     value: selectedTrenche,
-  //                     isExpanded: true,
-  //                     hint: const Text("Select Trenche"),
-  //                     items: trencheOptions.map((String trenche) {
-  //                       return DropdownMenuItem<String>(
-  //                         value: trenche,
-  //                         child: Text("Trenche $trenche - ${taskProvider.getTrencheTargetPoints(trenche)} Points Daily"),
-  //                       );
-  //                     }).toList(),
-  //                     onChanged: (String? newValue) {
-  //                       setState(() {
-  //                         selectedTrenche = newValue;
-  //                       });
-  //                     },
-  //                   ),
-  //                 ],
-  //               ),
-  //             );
-  //           },
-  //         ),
-  //         actions: [
-  //           TextButton(
-  //             onPressed: () {
-  //               Navigator.pop(context);
-  //             },
-  //             child: const Text(
-  //               "Cancel",
-  //               style: TextStyle(
-  //                 color: Colors.grey,
-  //                 fontSize: 16,
-  //               ),
-  //             ),
-  //           ),
-  //           ElevatedButton(
-  //             onPressed: () {
-  //               if (selectedTrenche != null) {
-  //                 taskProvider.setSelectedTrenche(widget.userName, selectedTrenche!);
-  //                 ScaffoldMessenger.of(context).showSnackBar(
-  //                   SnackBar(
-  //                     content: Text("Selected Trenche $selectedTrenche for the month"),
-  //                     duration: const Duration(seconds: 2),
-  //                     backgroundColor: Colors.green,
-  //                   ),
-  //                 );
-  //                 Navigator.pop(context);
-  //               }
-  //             },
-  //             style: ElevatedButton.styleFrom(
-  //               backgroundColor: Colors.orange,
-  //               shape: RoundedRectangleBorder(
-  //                 borderRadius: BorderRadius.circular(10),
-  //               ),
-  //             ),
-  //             child: const Text(
-  //               "Confirm",
-  //               style: TextStyle(
-  //                 color: Colors.white,
-  //                 fontSize: 16,
-  //               ),
-  //             ),
-  //           ),
-  //         ],
-  //       );
-  //     },
-  //   );
-  // }
 
   Widget _buildStatsAndSuggestionsCard() {
     return Consumer<TaskProvider>(

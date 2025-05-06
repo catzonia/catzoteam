@@ -1,13 +1,14 @@
 import 'package:flutter/material.dart';
 import 'package:provider/provider.dart';
 import 'package:cloud_firestore/cloud_firestore.dart';
-import 'package:intl/intl.dart';
 import 'package:flutter_slidable/flutter_slidable.dart';
 import 'package:collection/collection.dart';
 import 'package:catzoteam/provider.dart';
 import 'package:catzoteam/models/painter.dart';
 import 'package:catzoteam/widgets/staff_selector_dialog.dart';
 import 'package:catzoteam/models/task_category.dart'; 
+import 'package:intl/intl.dart';
+import 'dart:async';
 import 'dart:math';
 
 class ManagerScreen extends StatefulWidget {
@@ -259,7 +260,6 @@ class _ManagerScreenState extends State<ManagerScreen> {
               ],
             ),
           ),
-          // Positioned close icon at top right
           Positioned(
             right: 0,
             top: 0,
@@ -743,14 +743,14 @@ class _ManagerScreenState extends State<ManagerScreen> {
 
                           const SizedBox(height: 16),
                           const Text(
-                            "Cat Name",
+                            "Remark",
                             style: TextStyle(fontSize: 16, color: Colors.black87),
                           ),
                           const SizedBox(height: 8),
                           TextField(
                             controller: catNameController,
                             decoration: InputDecoration(
-                              hintText: "Enter cat name",
+                              hintText: "Enter remark",
                               hintStyle: TextStyle(color: Colors.grey[400]),
                               border: OutlineInputBorder(
                                 borderRadius: BorderRadius.circular(8),
@@ -1107,7 +1107,7 @@ class _ManagerScreenState extends State<ManagerScreen> {
       builder: (context) {
         return AlertDialog(
           shape: RoundedRectangleBorder(
-            borderRadius: BorderRadius.circular(20)
+            borderRadius: BorderRadius.circular(20),
           ),
           backgroundColor: Colors.white,
           title: Row(
@@ -1159,7 +1159,8 @@ class _ManagerScreenState extends State<ManagerScreen> {
                       const SizedBox(height: 8),
                       TextField(
                         controller: taskNameController,
-                        decoration:InputDecoration(
+                        decoration: InputDecoration(
+                          hintText: "Enter task name",
                           hintStyle: TextStyle(color: Colors.grey[400]),
                           border: OutlineInputBorder(
                             borderRadius: BorderRadius.circular(8),
@@ -1175,16 +1176,16 @@ class _ManagerScreenState extends State<ManagerScreen> {
                           ),
                         ),
                       ),
-                      
                       const SizedBox(height: 16),
                       const Text(
-                        "Cat Name",
+                        "Remark",
                         style: TextStyle(fontSize: 16, color: Colors.black87),
                       ),
                       const SizedBox(height: 8),
                       TextField(
                         controller: catNameController,
                         decoration: InputDecoration(
+                          hintText: "Enter remark",
                           hintStyle: TextStyle(color: Colors.grey[400]),
                           border: OutlineInputBorder(
                             borderRadius: BorderRadius.circular(8),
@@ -1224,7 +1225,7 @@ class _ManagerScreenState extends State<ManagerScreen> {
                             lastDate: DateTime(2030),
                             builder: (BuildContext context, Widget? child) {
                               return Theme(data: _orangePickerTheme, child: child!);
-                            }
+                            },
                           );
                           if (pickedDate != null) {
                             setState(() {
@@ -1359,6 +1360,8 @@ class _ManagerScreenState extends State<ManagerScreen> {
                       DropdownButtonFormField<String>(
                         value: staffMembers.contains(selectedAssignee) ? selectedAssignee : null,
                         decoration: InputDecoration(
+                          hintText: "Select assignee",
+                          hintStyle: TextStyle(color: Colors.grey[400]),
                           border: OutlineInputBorder(
                             borderRadius: BorderRadius.circular(8),
                             borderSide: BorderSide(color: Colors.grey[300]!),
@@ -1386,55 +1389,101 @@ class _ManagerScreenState extends State<ManagerScreen> {
                       ),
                       const SizedBox(height: 16),
                       const Text(
-                        "Assitant 1",
+                        "Assistant 1",
                         style: TextStyle(fontSize: 16, color: Colors.black87),
                       ),
                       const SizedBox(height: 8),
                       DropdownButtonFormField<String>(
                         value: staffMembers.contains(selectedAssistant1) ? selectedAssistant1 : null,
-                        decoration: const InputDecoration(
-                          border: OutlineInputBorder(),
+                        decoration: InputDecoration(
+                          hintText: "Select assistant 1",
+                          hintStyle: TextStyle(color: Colors.grey[400]),
+                          border: OutlineInputBorder(
+                            borderRadius: BorderRadius.circular(8),
+                            borderSide: BorderSide(color: Colors.grey[300]!),
+                          ),
+                          enabledBorder: OutlineInputBorder(
+                            borderRadius: BorderRadius.circular(8),
+                            borderSide: BorderSide(color: Colors.grey[300]!),
+                          ),
+                          focusedBorder: OutlineInputBorder(
+                            borderRadius: BorderRadius.circular(8),
+                            borderSide: const BorderSide(color: Colors.orange),
+                          ),
                         ),
                         items: staffMembers.map((name) => DropdownMenuItem(value: name, child: Text(name))).toList(),
                         onChanged: (value) => setState(() => selectedAssistant1 = value ?? "none"),
                       ),
                       const SizedBox(height: 16),
                       const Text(
-                        "Assitant 2",
+                        "Assistant 2",
                         style: TextStyle(fontSize: 16, color: Colors.black87),
                       ),
                       const SizedBox(height: 8),
                       DropdownButtonFormField<String>(
                         value: staffMembers.contains(selectedAssistant2) ? selectedAssistant2 : null,
-                        decoration: const InputDecoration(
-                          border: OutlineInputBorder(),
+                        decoration: InputDecoration(
+                          hintText: "Select assistant 2",
+                          hintStyle: TextStyle(color: Colors.grey[400]),
+                          border: OutlineInputBorder(
+                            borderRadius: BorderRadius.circular(8),
+                            borderSide: BorderSide(color: Colors.grey[300]!),
+                          ),
+                          enabledBorder: OutlineInputBorder(
+                            borderRadius: BorderRadius.circular(8),
+                            borderSide: BorderSide(color: Colors.grey[300]!),
+                          ),
+                          focusedBorder: OutlineInputBorder(
+                            borderRadius: BorderRadius.circular(8),
+                            borderSide: const BorderSide(color: Colors.orange),
+                          ),
                         ),
                         items: staffMembers.map((name) => DropdownMenuItem(value: name, child: Text(name))).toList(),
                         onChanged: (value) => setState(() => selectedAssistant2 = value ?? "none"),
                       ),
-                        ],
-                      ),
-                    );
-                  }
-                ),
-              ),
+                    ],
+                  ),
+                );
+              },
+            ),
+          ),
           actions: [
             TextButton(
               onPressed: () async {
                 final taskID = task["taskID"];
+                if (taskID == null || taskID.isEmpty) {
+                  ScaffoldMessenger.of(context).showSnackBar(
+                    const SnackBar(
+                      content: Text("Invalid task ID."),
+                      backgroundColor: Colors.red,
+                      duration: Duration(seconds: 2),
+                    ),
+                  );
+                  return;
+                }
+
                 final confirm = await showDialog<bool>(
                   context: context,
                   builder: (context) => AlertDialog(
+                    shape: RoundedRectangleBorder(
+                      borderRadius: BorderRadius.circular(20),
+                    ),
                     title: const Text("Confirm Delete"),
                     content: const Text("Are you sure you want to delete this task? This action cannot be undone."),
                     actions: [
                       TextButton(
-                        onPressed: () => Navigator.pop(context),
-                        child: const Text("Cancel"),
+                        onPressed: () => Navigator.pop(context, false),
+                        child: const Text(
+                          "Cancel",
+                          style: TextStyle(color: Colors.grey, fontSize: 16),
+                        ),
                       ),
                       TextButton(
-                        onPressed: () => Navigator.pop(context),
-                        child: const Text("Delete", style: TextStyle(color: Colors.red)),
+                        onPressed: () => Navigator.pop(context, true),
+                        child: const Text(
+                          "Delete",
+                          style: TextStyle(color: Colors.red, fontSize: 16),
+                        ),
                       ),
                     ],
                   ),
@@ -1443,18 +1492,29 @@ class _ManagerScreenState extends State<ManagerScreen> {
                 if (confirm == true) {
                   try {
                     await FirebaseFirestore.instance.collection("tasks").doc(taskID).delete();
-                    Navigator.pop(context);
+                    Navigator.pop(context); // Close the edit dialog
                     ScaffoldMessenger.of(context).showSnackBar(
-                      const SnackBar(content: Text("Task deleted successfully."), backgroundColor: Colors.red),
+                      const SnackBar(
+                        content: Text("Task deleted successfully."),
+                        backgroundColor: Colors.red,
+                        duration: Duration(seconds: 2),
+                      ),
                     );
                   } catch (e) {
                     ScaffoldMessenger.of(context).showSnackBar(
-                      SnackBar(content: Text("Error deleting task: $e"), backgroundColor: Colors.red),
-                    );        
+                      SnackBar(
+                        content: Text("Error deleting task: $e"),
+                        backgroundColor: Colors.red,
+                        duration: Duration(seconds: 2),
+                      ),
+                    );
                   }
                 }
               },
-              child: const Text("Delete", style: TextStyle(color: Colors.red)),
+              child: const Text(
+                "Delete",
+                style: TextStyle(color: Colors.red, fontSize: 16),
+              ),
             ),
             ElevatedButton(
               onPressed: () async {
@@ -1472,15 +1532,33 @@ class _ManagerScreenState extends State<ManagerScreen> {
                   });
                   Navigator.pop(context);
                   ScaffoldMessenger.of(context).showSnackBar(
-                    const SnackBar(content: Text("Task updated successfully.")),
+                    const SnackBar(
+                      content: Text("Task updated successfully."),
+                      backgroundColor: Colors.green,
+                      duration: Duration(seconds: 2),
+                    ),
                   );
                 } catch (e) {
                   ScaffoldMessenger.of(context).showSnackBar(
-                    SnackBar(content: Text("Error: $e")),
+                    SnackBar(
+                      content: Text("Error: $e"),
+                      backgroundColor: Colors.red,
+                      duration: Duration(seconds: 2),
+                    ),
                   );
                 }
               },
-              child: const Text("Save"),
+              style: ElevatedButton.styleFrom(
+                backgroundColor: Colors.orange,
+                shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(10)),
+              ),
+              child: const Text(
+                "Save",
+                style: TextStyle(
+                  color: Colors.white,
+                  fontSize: 16,
+                ),
+              ),
             ),
           ],
         );
@@ -2259,7 +2337,7 @@ class _ManagerScreenState extends State<ManagerScreen> {
   }
 
   List<Widget> _getTableHeaders() {
-    List<String> headers = ["Task ID", "Task", "Order ID", "Cat Name", "Date", "Time", "Points", "Priority", "Action"];
+    List<String> headers = ["Task ID", "Task", "Remark", "Date", "Time", "Points", "Priority", "Action"];
     return [
       Expanded(flex: 1, child: _tableHeaderText(headers[0])),
       const SizedBox(width: 3),
@@ -2276,8 +2354,6 @@ class _ManagerScreenState extends State<ManagerScreen> {
       Expanded(flex: 1, child: _tableHeaderText(headers[6])),
       const SizedBox(width: 3),
       Expanded(flex: 1, child: _tableHeaderText(headers[7])),
-      const SizedBox(width: 3),
-      Expanded(flex: 1, child: _tableHeaderText(headers[8])),
     ];
   }
 
@@ -2349,8 +2425,6 @@ class _ManagerScreenState extends State<ManagerScreen> {
               Expanded(flex: 1, child: _tableCell(task["taskID"])),
               const SizedBox(width: 3),
               Expanded(flex: 2, child: _tableCell(task["task"])),
-              const SizedBox(width: 3),
-              Expanded(flex: 1, child: _tableCell(task["orderID"] ?? "-")),
               const SizedBox(width: 3),
               Expanded(flex: 1, child: _tableCell(formatCatName(task["catName"]))),
               const SizedBox(width: 3),
@@ -2492,8 +2566,7 @@ class _ManagerScreenState extends State<ManagerScreen> {
                 children: [
                   Expanded(child: _tableHeaderText("Task ID")),
                   Expanded(child: _tableHeaderText("Task")),
-                  Expanded(child: _tableHeaderText("Order ID")),
-                  Expanded(child: _tableHeaderText("Cat Name")),
+                  Expanded(child: _tableHeaderText("Remark")),
                   Expanded(child: _tableHeaderText("Date")),
                   Expanded(child: _tableHeaderText("Time")),
                   Expanded(child: _tableHeaderText("Points")),
@@ -2585,8 +2658,6 @@ class _ManagerScreenState extends State<ManagerScreen> {
               const SizedBox(width: 8),
               Expanded(child: _tableCell(task["task"])),
               const SizedBox(width: 8),
-              Expanded(child: _tableCell(task["orderID"] ?? "-")),
-              const SizedBox(width: 8),
               Expanded(child: _tableCell(formatCatName(task["catName"]))),
               const SizedBox(width: 8),
               Expanded(child: _tableCell(date)),
@@ -2643,8 +2714,7 @@ class _ManagerScreenState extends State<ManagerScreen> {
                 children: [
                   Expanded(child: _tableHeaderText("Task ID")),
                   Expanded(child: _tableHeaderText("Task")),
-                  Expanded(child: _tableHeaderText("Order ID")),
-                  Expanded(child: _tableHeaderText("Cat Name")),
+                  Expanded(child: _tableHeaderText("Remark")),
                   Expanded(child: _tableHeaderText("Date")),
                   Expanded(child: _tableHeaderText("Time")),
                   Expanded(child: _tableHeaderText("Points")),
@@ -2712,8 +2782,6 @@ class _ManagerScreenState extends State<ManagerScreen> {
               Expanded(child: _tableCell(task["taskID"])),
               const SizedBox(width: 8),
               Expanded(child: _tableCell(task["task"])),
-              const SizedBox(width: 8),
-              Expanded(child: _tableCell(task["orderID"] ?? "-")),
               const SizedBox(width: 8),
               Expanded(child: _tableCell(formatCatName(task["catName"]))),
               const SizedBox(width: 8),

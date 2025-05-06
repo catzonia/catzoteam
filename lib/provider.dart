@@ -182,7 +182,7 @@ class TaskProvider extends ChangeNotifier {
             if (staffDailyPoints[staffName] != oldDailyPoints) {
               notifyListeners();
             }
-            staffSelectedTrenche[staffName] = data['selectedTrenche'] ?? "35";
+            staffSelectedTrenche[staffName] = data['selectedTrenche'] ?? "50";
             staffLastDailyResetDate[staffName] = data['lastDailyResetDate'] != null
                 ? (data['lastDailyResetDate'] as Timestamp).toDate()
                 : null;
@@ -242,8 +242,8 @@ class TaskProvider extends ChangeNotifier {
     }
 
     int initialDeficit = isFirstDayOrMonth
-        ? (_trencheTargetPoints["35"] ?? 38)
-        : previousDeficit + (_trencheTargetPoints["35"] ?? 38);
+        ? (_trencheTargetPoints["50"] ?? 53)
+        : previousDeficit + (_trencheTargetPoints["50"] ?? 53);
 
     try {
       await ref.set({
@@ -253,7 +253,7 @@ class TaskProvider extends ChangeNotifier {
         'dailyPoints': 0,
         'monthlyPoints': previousMonthlyPoints,
         'dailyDeficit': initialDeficit,
-        'selectedTrenche': "35",
+        'selectedTrenche': "50",
         'lastDailyResetDate': FieldValue.serverTimestamp(),
         'lastMonthlyResetDate': FieldValue.serverTimestamp(),
 
@@ -269,7 +269,7 @@ class TaskProvider extends ChangeNotifier {
       staffDailyPoints[staffName] = 0;
       staffMonthlyPoints[staffName] = previousMonthlyPoints;
       staffDailyDeficit[staffName] = initialDeficit;
-      staffSelectedTrenche[staffName] = "35";
+      staffSelectedTrenche[staffName] = "50";
       staffLastDailyResetDate[staffName] = now;
       staffLastMonthlyResetDate[staffName] = now;
       notifyListeners();
@@ -314,7 +314,7 @@ class TaskProvider extends ChangeNotifier {
           DateTime lastResetNormalized = DateTime(lastResetDate.year, lastResetDate.month, lastResetDate.day);
           if (todayNormalized.isAfter(lastResetNormalized)) {
             print('Missed daily reset detected for $staff. Updating deficit...');
-            int baseTarget = _trencheTargetPoints[staffSelectedTrenche[staff] ?? "35"] ?? 38;
+            int baseTarget = _trencheTargetPoints[staffSelectedTrenche[staff] ?? "50"] ?? 53;
             staffDailyDeficit[staff] = lastDeficit + baseTarget;
             print('Updated $staff dailyDeficit to ${staffDailyDeficit[staff]} due to missed reset');
             staffDailyPoints[staff] = 0;
@@ -619,10 +619,10 @@ class TaskProvider extends ChangeNotifier {
       print('Resetting monthly points and deficit for $staff');
       staffMonthlyPoints[staff] = 0;
       staffDailyPoints[staff] = 0;
-      staffDailyDeficit[staff] = _trencheTargetPoints[staffSelectedTrenche[staff] ?? "35"] ?? 38;
+      staffDailyDeficit[staff] = _trencheTargetPoints[staffSelectedTrenche[staff] ?? "50"] ?? 53;
       staffLastMonthlyResetDate[staff] = thisMonth;
       staffLastDailyResetDate[staff] = today;
-      staffSelectedTrenche[staff] = "35";
+      staffSelectedTrenche[staff] = "50";
       _staffClockedIn[staff] = false;
       _staffShiftStartTime[staff] = null;
       _updatePointsInFirestore(staff, nric, todayDocId);
@@ -664,7 +664,7 @@ class TaskProvider extends ChangeNotifier {
         print('Error fetching yesterday\'s data for $staff: $e');
       }
 
-      int baseTarget = _trencheTargetPoints[staffSelectedTrenche[staff] ?? "35"] ?? 38;
+      int baseTarget = _trencheTargetPoints[staffSelectedTrenche[staff] ?? "50"] ?? 53;
       staffDailyDeficit[staff] = previousDeficit + baseTarget;
       print('New daily deficit for $staff: $previousDeficit + $baseTarget = ${staffDailyDeficit[staff]}');
 
@@ -720,7 +720,7 @@ class TaskProvider extends ChangeNotifier {
           'dailyPoints': staffDailyPoints[staff] ?? 0,
           'monthlyPoints': previousMonthlyPoints + (staffDailyPoints[staff] ?? 0),
           'dailyDeficit': staffDailyDeficit[staff] ?? 0,
-          'selectedTrenche': staffSelectedTrenche[staff] ?? "35",
+          'selectedTrenche': staffSelectedTrenche[staff] ?? "50",
           'lastDailyResetDate': Timestamp.fromDate(staffLastDailyResetDate[staff] ?? DateTime.now()),
           'lastMonthlyResetDate': Timestamp.fromDate(staffLastMonthlyResetDate[staff] ?? DateTime.now()),
         }, SetOptions(merge: true));
@@ -1295,7 +1295,7 @@ class TaskProvider extends ChangeNotifier {
   }
 
   int getTrencheTargetPoints(String trenche) {
-    return _trencheTargetPoints[trenche] ?? 38;
+    return _trencheTargetPoints[trenche] ?? 53;
   }
 
   void setSelectedTrenche(String staffName, String trenche) {
@@ -1312,7 +1312,7 @@ class TaskProvider extends ChangeNotifier {
   }
 
   String getSelectedTrenche(String staffName) {
-    return staffSelectedTrenche[staffName] ?? "35";
+    return staffSelectedTrenche[staffName] ?? "50";
   }
 
   int getStaffInProgressPoints(String staffName, {DateTime? date}) {
@@ -1357,8 +1357,8 @@ class TaskProvider extends ChangeNotifier {
   }
 
   int getBaseTargetPoints(String staffName) {
-    String trenche = staffSelectedTrenche[staffName] ?? "35";
-    return _trencheTargetPoints[trenche] ?? 38;
+    String trenche = staffSelectedTrenche[staffName] ?? "50";
+    return _trencheTargetPoints[trenche] ?? 53;
   }
 
   int getTargetPoints(String staffName) {
