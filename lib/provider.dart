@@ -1,9 +1,10 @@
 import 'package:flutter/material.dart';
 import 'package:shared_preferences/shared_preferences.dart';
 import 'package:cloud_firestore/cloud_firestore.dart';
+import 'package:catzoteam/models/double.dart';
 import 'package:intl/intl.dart';
 import 'dart:convert';
-import 'dart:async'; // Added for Timer
+import 'dart:async';
 
 class TaskProvider extends ChangeNotifier {
   List<Map<String, dynamic>> _availableTasks = [];
@@ -15,21 +16,21 @@ class TaskProvider extends ChangeNotifier {
   Map<DateTime, List<String>> _staffStandbySchedule = {};
   Map<DateTime, List<String>> _staffLeaveSchedule = {};
 
-  Map<String, int> staffDailyPoints = {};
-  Map<String, int> staffMonthlyPoints = {};
-  Map<String, int> staffDailyDeficit = {};
+  Map<String, double> staffDailyPoints = {};
+  Map<String, double> staffMonthlyPoints = {};
+  Map<String, double> staffDailyDeficit = {};
   Map<String, String> staffSelectedTrenche = {};
   Map<String, DateTime?> staffLastDailyResetDate = {};
   Map<String, DateTime?> staffLastMonthlyResetDate = {};
 
-  Map<String, Map<String, int>> staffBadges = {};
-  Map<String, int> getStaffBadges(String staffName) {
+  Map<String, Map<String, double>> staffBadges = {};
+  Map<String, double> getStaffBadges(String staffName) {
     return staffBadges[staffName] ?? {
-      'badge45': 0,
-      'badge55': 0,
-      'badge65': 0,
-      'badge75': 0,
-      'badge85': 0,
+      'badge45': 0.0,
+      'badge55': 0.0,
+      'badge65': 0.0,
+      'badge75': 0.0,
+      'badge85': 0.0,
     };
   }
 
@@ -41,13 +42,13 @@ class TaskProvider extends ChangeNotifier {
   Map<String, String> _fullNameToUsername = {};
   Map<String, String> get fullNameToUsername => _fullNameToUsername;
 
-  final Map<String, int> _trencheTargetPoints = {
-    "35": 38,
-    "40": 43,
-    "45": 48,
-    "50": 53,
-    "55": 58,
-    "60": 63,
+  final Map<String, double> _trencheTargetPoints = {
+    "35": 38.0,
+    "40": 43.0,
+    "45": 48.0,
+    "50": 53.0,
+    "55": 58.0,
+    "60": 63.0,
   };
 
   static const List<String> priorityLevels = ["no", "low", "medium", "high"];
@@ -60,23 +61,36 @@ class TaskProvider extends ChangeNotifier {
     _initializeStaffSchedule();
     _fetchTasksFromFirestore();
     _loadStaffNrics();
-    _checkAllStaffResets();
+    // Delay reset check to avoid race conditions
+    WidgetsBinding.instance.addPostFrameCallback((_) {
+      _checkAllStaffResets();
+    });
   }
 
   void setBranchId(String newBranchId) {
     if (_branchId != newBranchId) {
       _branchId = newBranchId;
 
-      // Clear tasks immediately to prevent UI from showing wrong branch tasks
+      // Clear all state
       _availableTasks.clear();
       _assignedTasks.clear();
       _completedTasks.clear();
+      _staffNrics.clear();
+      _staffClockedIn.clear();
+      _staffShiftStartTime.clear();
+      staffDailyPoints.clear();
+      staffMonthlyPoints.clear();
+      staffDailyDeficit.clear();
+      staffSelectedTrenche.clear();
+      staffLastDailyResetDate.clear();
+      staffLastMonthlyResetDate.clear();
+      staffBadges.clear();
+      
       WidgetsBinding.instance.addPostFrameCallback((_) {
         notifyListeners();
+        _fetchTasksFromFirestore();
+        _loadStaffNrics();
       });
-      
-      _fetchTasksFromFirestore();
-      _loadStaffNrics();
     }
   }
 
@@ -151,10 +165,6 @@ class TaskProvider extends ChangeNotifier {
 
     String todayDocId = DateFormat('yyyyMMdd').format(DateTime.now());
     print('Setting up listener for $staffName at points/staff/$todayDocId/$nric');
-    if (todayDocId.length != 8 || nric.isEmpty) {
-      print('Error: Invalid Firestore path for $staffName - todayDocId: $todayDocId, nric: $nric');
-      return;
-    }
 
     FirebaseFirestore.instance
         .collection('points')
@@ -167,21 +177,17 @@ class TaskProvider extends ChangeNotifier {
           if (snapshot.exists) {
             print('[SNAPSHOT] Data exists for $staffName');
             var data = snapshot.data()!;
-            int oldDailyPoints = staffDailyPoints[staffName] ?? 0;
-            staffDailyPoints[staffName] = data['dailyPoints']?.toInt() ?? 0;
-            staffMonthlyPoints[staffName] = data['monthlyPoints']?.toInt() ?? 0;
+            // Update local state only if data exists
+            staffDailyPoints[staffName] = data['dailyPoints']?.toDouble() ?? 0.0;
+            staffMonthlyPoints[staffName] = data['monthlyPoints']?.toDouble() ?? 0.0;
+            staffDailyDeficit[staffName] = data['dailyDeficit']?.toDouble() ?? 0.0;
             staffBadges[staffName] = {
-              'badge45': data['badge45']?.toInt() ?? 0,
-              'badge55': data['badge55']?.toInt() ?? 0,
-              'badge65': data['badge65']?.toInt() ?? 0,
-              'badge75': data['badge75']?.toInt() ?? 0,
-              'badge85': data['badge85']?.toInt() ?? 0,
+              'badge45': data['badge45']?.toDouble() ?? 0.0,
+              'badge55': data['badge55']?.toDouble() ?? 0.0,
+              'badge65': data['badge65']?.toDouble() ?? 0.0,
+              'badge75': data['badge75']?.toDouble() ?? 0.0,
+              'badge85': data['badge85']?.toDouble() ?? 0.0,
             };
-            staffDailyDeficit[staffName] = data['dailyDeficit']?.toInt() ?? 0;
-            print('Updated $staffName: dailyPoints=${staffDailyPoints[staffName]}, monthlyPoints=${staffMonthlyPoints[staffName]}, dailyDeficit=${staffDailyDeficit[staffName]}');
-            if (staffDailyPoints[staffName] != oldDailyPoints) {
-              notifyListeners();
-            }
             staffSelectedTrenche[staffName] = data['selectedTrenche'] ?? "50";
             staffLastDailyResetDate[staffName] = data['lastDailyResetDate'] != null
                 ? (data['lastDailyResetDate'] as Timestamp).toDate()
@@ -189,11 +195,12 @@ class TaskProvider extends ChangeNotifier {
             staffLastMonthlyResetDate[staffName] = data['lastMonthlyResetDate'] != null
                 ? (data['lastMonthlyResetDate'] as Timestamp).toDate()
                 : null;
+            print('Updated $staffName: dailyPoints=${staffDailyPoints[staffName]}, monthlyPoints=${staffMonthlyPoints[staffName]}, dailyDeficit=${staffDailyDeficit[staffName]}');
             notifyListeners();
           } else {
             print('[SNAPSHOT] ❌ snapshot.exists == false for $staffName');
-            print('No points document for $staffName, initializing...');
-            _initializePointsForStaff(staffName);
+            print('No points document for $staffName, checking reset status...');
+            _checkAndResetPoints(staffName);
           }
         }, onError: (e) {
           print('Error listening to points for $staffName: $e');
@@ -217,6 +224,23 @@ class TaskProvider extends ChangeNotifier {
         .collection(todayDocId)
         .doc(nric);
 
+    // Check if document already exists
+    final snapshot = await ref.get();
+    if (snapshot.exists) {
+      print('Points document already exists for $staffName on $todayDocId. Skipping initialization.');
+      return;
+    }
+
+    // Check if reset already happened today
+    DateTime? lastReset = staffLastDailyResetDate[staffName];
+    if  (lastReset != null &&
+        lastReset.year == now.year &&
+        lastReset.month == now.month &&
+        lastReset.day == now.day) {
+      print('Points already reset today for $staffName. Skipping initialization.');
+      return;
+    }
+
     DateTime yesterday = now.subtract(Duration(days: 1));
     String yesterdayDocId = DateFormat('yyyyMMdd').format(yesterday);
     final yesterdayRef = FirebaseFirestore.instance
@@ -225,14 +249,14 @@ class TaskProvider extends ChangeNotifier {
         .collection(yesterdayDocId)
         .doc(nric);
 
-    int previousMonthlyPoints = 0;
-    int previousDeficit = 0;
+    double previousMonthlyPoints = 0.0;
+    double previousDeficit = 0.0;
     bool isFirstDayOrMonth = now.day == 1;
     try {
       final yesterdaySnapshot = await yesterdayRef.get();
       if (yesterdaySnapshot.exists) {
-        previousMonthlyPoints = yesterdaySnapshot.data()!['monthlyPoints']?.toInt() ?? 0;
-        previousDeficit = yesterdaySnapshot.data()!['dailyDeficit']?.toInt() ?? 0;
+        previousMonthlyPoints = yesterdaySnapshot.data()!['monthlyPoints']?.toDouble() ?? 0.0;
+        previousDeficit = yesterdaySnapshot.data()!['dailyDeficit']?.toDouble() ?? 0.0;
         print('Fetched previous monthly points for $staffName: $previousMonthlyPoints, deficit: $previousDeficit');
       } else {
         isFirstDayOrMonth = true;
@@ -241,32 +265,30 @@ class TaskProvider extends ChangeNotifier {
       print('Error fetching yesterday\'s points for $staffName: $e');
     }
 
-    int initialDeficit = isFirstDayOrMonth
-        ? (_trencheTargetPoints["50"] ?? 53)
-        : previousDeficit + (_trencheTargetPoints["50"] ?? 53);
+    double initialDeficit = isFirstDayOrMonth
+        ? (_trencheTargetPoints["50"] ?? 53.0)
+        : previousDeficit + (_trencheTargetPoints["50"] ?? 53.0);
 
     try {
       await ref.set({
         'branch': _branchId,
         'fullname': staffName,
         'nric': nric,
-        'dailyPoints': 0,
-        'monthlyPoints': previousMonthlyPoints,
-        'dailyDeficit': initialDeficit,
+        'dailyPoints': 0.0,
+        'monthlyPoints': previousMonthlyPoints.toDouble(),
+        'dailyDeficit': initialDeficit.toDouble(),
         'selectedTrenche': "50",
         'lastDailyResetDate': FieldValue.serverTimestamp(),
         'lastMonthlyResetDate': FieldValue.serverTimestamp(),
-
-        // NEW Badge counters initialized
-        'badge45': 0,
-        'badge55': 0,
-        'badge65': 0,
-        'badge75': 0,
-        'badge85': 0,
+        'badge45': 0.0,
+        'badge55': 0.0,
+        'badge65': 0.0,
+        'badge75': 0.0,
+        'badge85': 0.0,
       }, SetOptions(merge: true));
       print('Initialized points for $staffName at points/staff/$todayDocId/$nric');
       print("Initializing $staffName with deficit: $initialDeficit (previous: $previousDeficit)");
-      staffDailyPoints[staffName] = 0;
+      staffDailyPoints[staffName] = 0.0;
       staffMonthlyPoints[staffName] = previousMonthlyPoints;
       staffDailyDeficit[staffName] = initialDeficit;
       staffSelectedTrenche[staffName] = "50";
@@ -303,8 +325,8 @@ class TaskProvider extends ChangeNotifier {
         }).toList();
       }
 
-      int? lastDailyPoints = prefs.getInt('lastDailyPoints_$staff');
-      int? lastDeficit = prefs.getInt('lastDeficit_$staff');
+      double? lastDailyPoints = prefs.getDouble('lastDailyPoints_$staff');
+      double? lastDeficit = prefs.getDouble('lastDeficit_$staff');
       String? lastResetDateString = prefs.getString('lastResetDate_$staff');
       if (lastDailyPoints != null && lastDeficit != null && lastResetDateString != null) {
         try {
@@ -314,10 +336,10 @@ class TaskProvider extends ChangeNotifier {
           DateTime lastResetNormalized = DateTime(lastResetDate.year, lastResetDate.month, lastResetDate.day);
           if (todayNormalized.isAfter(lastResetNormalized)) {
             print('Missed daily reset detected for $staff. Updating deficit...');
-            int baseTarget = _trencheTargetPoints[staffSelectedTrenche[staff] ?? "50"] ?? 53;
+            double baseTarget = _trencheTargetPoints[staffSelectedTrenche[staff] ?? "50"] ?? 53.0;
             staffDailyDeficit[staff] = lastDeficit + baseTarget;
             print('Updated $staff dailyDeficit to ${staffDailyDeficit[staff]} due to missed reset');
-            staffDailyPoints[staff] = 0;
+            staffDailyPoints[staff] = 0.0;
             staffLastDailyResetDate[staff] = today;
             _updatePointsInFirestore(staff, _staffNrics[staff]!, DateFormat('yyyyMMdd').format(today));
             notifyListeners();
@@ -405,7 +427,7 @@ class TaskProvider extends ChangeNotifier {
               "time": data['time'] ?? '',
               "priority": data['priority'] ?? 'no',
               "displayed": data['displayed'] ?? false,
-              "points": data['points'] ?? 0,
+              "points": parsePoints(data['points']),
               "docId": doc.id,
             };
           }).toList();
@@ -432,7 +454,7 @@ class TaskProvider extends ChangeNotifier {
               "assistant1": data['assistant1'] ?? 'none',
               "assistant2": data['assistant2'] ?? 'none',
               "priority": data['priority'] ?? 'no',
-              "points": data['points'] ?? 0,
+              "points": parsePoints(data['points']),
               "docId": doc.id,
             };
           }).toList();
@@ -488,7 +510,7 @@ class TaskProvider extends ChangeNotifier {
               "assistant1": data['assistant1'] ?? 'none',
               "assistant2": data['assistant2'] ?? 'none',
               "completionDate": parseTimestamp(data['completionDate']) ?? '',
-              "points": data['points'] ?? 0,
+              "points": parsePoints(data['points']),
               "docId": doc.id,
             };
           }).toList();
@@ -577,31 +599,30 @@ class TaskProvider extends ChangeNotifier {
     final today = DateTime(now.year, now.month, now.day);
     final thisMonth = DateTime(now.year, now.month, 1);
     String nric = _staffNrics[staff] ?? 'unknown';
-    if (nric == 'unknown') return;
+    if (nric == 'unknown') {
+      print('Cannot check/reset points: NRIC not found for $staff');
+      return;
+    }
 
     String todayDocId = DateFormat('yyyyMMdd').format(today);
-
     final ref = FirebaseFirestore.instance
         .collection('points')
         .doc('staff')
         .collection(todayDocId)
         .doc(nric);
     final snapshot = await ref.get();
-    if (!snapshot.exists) {
-      // Prevent repeated reset by checking if today was already reset
-      DateTime? lastReset = staffLastDailyResetDate[staff];
-      DateTime today = DateTime.now();
-      if (lastReset != null &&
-          lastReset.year == today.year &&
-          lastReset.month == today.month &&
-          lastReset.day == today.day) {
-        print('Points already reset today for $staff. Skipping reinitialization.');
-      } else {
-        print('Points document missing for $staff on $todayDocId. Initializing...');
-        await _initializePointsForStaff(staff);
-      }
+    if (snapshot.exists) {
+      var data = snapshot.data()!;
+      if (data['dailyPoints'] != null && data['dailyPoints'] > 0) {
+        print('Points document exists for $staff with dailyPoints=${data['dailyPoints']}. Skipping reset.');
+        return;
+      } 
+    } else {  
+      print('Points document does not exist for $staff on $todayDocId. Initializing...');
+      await _initializePointsForStaff(staff);
     }
 
+    // Initialize reset dates if null
     if (staffLastDailyResetDate[staff] == null) {
       print('Initializing daily reset date for $staff');
       staffLastDailyResetDate[staff] = today.subtract(Duration(days: 1));
@@ -611,6 +632,7 @@ class TaskProvider extends ChangeNotifier {
       staffLastMonthlyResetDate[staff] = thisMonth;
     }
 
+    // Monthly reset
     final lastMonthlyReset = DateTime(
         staffLastMonthlyResetDate[staff]!.year,
         staffLastMonthlyResetDate[staff]!.month,
@@ -619,22 +641,24 @@ class TaskProvider extends ChangeNotifier {
       print('Resetting monthly points and deficit for $staff');
       staffMonthlyPoints[staff] = 0;
       staffDailyPoints[staff] = 0;
-      staffDailyDeficit[staff] = _trencheTargetPoints[staffSelectedTrenche[staff] ?? "50"] ?? 53;
+      staffDailyDeficit[staff] = _trencheTargetPoints[staffSelectedTrenche[staff] ?? "50"] ?? 53.0;
       staffLastMonthlyResetDate[staff] = thisMonth;
       staffLastDailyResetDate[staff] = today;
       staffSelectedTrenche[staff] = "50";
       _staffClockedIn[staff] = false;
       _staffShiftStartTime[staff] = null;
-      _updatePointsInFirestore(staff, nric, todayDocId);
-      _saveClockData(staff);
+      await _updatePointsInFirestore(staff, nric, todayDocId);
+      await _saveClockData(staff);
       final prefs = await SharedPreferences.getInstance();
-      await prefs.setInt('lastDailyPoints_$staff', 0);
-      await prefs.setInt('lastDeficit_$staff', staffDailyDeficit[staff] ?? 0);
+      await prefs.setDouble('lastDailyPoints_$staff', 0.0);
+      await prefs.setDouble('lastDeficit_$staff', staffDailyDeficit[staff] ?? 0.0);
       await prefs.setString('lastResetDate_$staff', today.toIso8601String());
+      print('Monthly reset completed for $staff: dailyPoints=0, monthlyPoints=0, deficit=${staffDailyDeficit[staff]}');
       notifyListeners();
       return;
     }
 
+    // Daily reset
     final lastDailyReset = DateTime(
         staffLastDailyResetDate[staff]!.year,
         staffLastDailyResetDate[staff]!.month,
@@ -650,13 +674,15 @@ class TaskProvider extends ChangeNotifier {
           .collection(yesterdayDocId)
           .doc(nric);
 
-      int previousDeficit = 0;
+      double previousDeficit = 0.0;
+      double previousMonthlyPoints = staffMonthlyPoints[staff] ?? 0.0;
       try {
         final yesterdaySnapshot = await yesterdayRef.get();
         if (yesterdaySnapshot.exists) {
           var data = yesterdaySnapshot.data()!;
-          previousDeficit = data['dailyDeficit']?.toInt() ?? 0;
-          print('Fetched yesterday\'s deficit for $staff: $previousDeficit');
+          previousDeficit = data['dailyDeficit']?.toDouble() ?? 0.0;
+          previousMonthlyPoints = data['monthlyPoints']?.toDouble() ?? 0.0;
+          print('Fetched yesterday\'s deficit for $staff: $previousDeficit, monthlyPoints=$previousMonthlyPoints');
         } else {
           print('No data found for $staff on $yesterdayDocId. Assuming zero deficit.');
         }
@@ -664,21 +690,23 @@ class TaskProvider extends ChangeNotifier {
         print('Error fetching yesterday\'s data for $staff: $e');
       }
 
-      int baseTarget = _trencheTargetPoints[staffSelectedTrenche[staff] ?? "50"] ?? 53;
+      double baseTarget = _trencheTargetPoints[staffSelectedTrenche[staff] ?? "50"] ?? 53.0;
       staffDailyDeficit[staff] = previousDeficit + baseTarget;
-      print('New daily deficit for $staff: $previousDeficit + $baseTarget = ${staffDailyDeficit[staff]}');
-
       staffDailyPoints[staff] = 0;
+      staffMonthlyPoints[staff] = previousMonthlyPoints; // Preserve monthly points
       staffLastDailyResetDate[staff] = today;
       _staffClockedIn[staff] = false;
       _staffShiftStartTime[staff] = null;
-      _updatePointsInFirestore(staff, nric, todayDocId);
-      _saveClockData(staff);
+      await _updatePointsInFirestore(staff, nric, todayDocId);
+      await _saveClockData(staff);
       final prefs = await SharedPreferences.getInstance();
-      await prefs.setInt('lastDailyPoints_$staff', 0);
-      await prefs.setInt('lastDeficit_$staff', staffDailyDeficit[staff] ?? 0);
+      await prefs.setDouble('lastDailyPoints_$staff', 0);
+      await prefs.setDouble('lastDeficit_$staff', staffDailyDeficit[staff] ?? 0);
       await prefs.setString('lastResetDate_$staff', today.toIso8601String());
+      print('Daily reset completed for $staff: dailyPoints=0, monthlyPoints=$previousMonthlyPoints, deficit=${staffDailyDeficit[staff]}');
       notifyListeners();
+    } else {
+      print('No reset needed for $staff: lastDailyReset=$lastDailyReset, today=$today');
     }
   }
 
@@ -697,11 +725,11 @@ class TaskProvider extends ChangeNotifier {
         .collection(yesterdayDocId)
         .doc(nric);
 
-    int previousMonthlyPoints = staffMonthlyPoints[staff] ?? 0;
+    double previousMonthlyPoints = staffMonthlyPoints[staff] ?? 0.0;
     try {
       final yesterdaySnapshot = await yesterdayRef.get();
       if (yesterdaySnapshot.exists) {
-        previousMonthlyPoints = yesterdaySnapshot.data()!['monthlyPoints']?.toInt() ?? 0;
+        previousMonthlyPoints = yesterdaySnapshot.data()!['monthlyPoints']?.toDouble() ?? 0.0;
         print('Fetched previous monthly points for $staff: $previousMonthlyPoints');
       }
     } catch (e) {
@@ -717,15 +745,15 @@ class TaskProvider extends ChangeNotifier {
           'branch': _branchId,
           'fullname': staff,
           'nric': nric,
-          'dailyPoints': staffDailyPoints[staff] ?? 0,
-          'monthlyPoints': previousMonthlyPoints + (staffDailyPoints[staff] ?? 0),
-          'dailyDeficit': staffDailyDeficit[staff] ?? 0,
+          'dailyPoints': staffDailyPoints[staff] ?? 0.0,
+          'monthlyPoints': previousMonthlyPoints + (staffDailyPoints[staff] ?? 0.0),
+          'dailyDeficit': staffDailyDeficit[staff] ?? 0.0,
           'selectedTrenche': staffSelectedTrenche[staff] ?? "50",
           'lastDailyResetDate': Timestamp.fromDate(staffLastDailyResetDate[staff] ?? DateTime.now()),
           'lastMonthlyResetDate': Timestamp.fromDate(staffLastMonthlyResetDate[staff] ?? DateTime.now()),
         }, SetOptions(merge: true));
         print('Updated points for $staff at points/staff/$docId/$nric');
-        staffMonthlyPoints[staff] = previousMonthlyPoints + (staffDailyPoints[staff] ?? 0);
+        staffMonthlyPoints[staff] = previousMonthlyPoints + (staffDailyPoints[staff] ?? 0.0);
         success = true;
         notifyListeners();
       } catch (e) {
@@ -744,7 +772,7 @@ class TaskProvider extends ChangeNotifier {
     }
   }
 
-  Future<void> incrementBadge(String staffName, int milestone) async {
+  Future<void> incrementBadge(String staffName, double milestone) async {
     String nric = _staffNrics[staffName] ?? 'unknown';
     if (nric == 'unknown') return;
 
@@ -755,10 +783,27 @@ class TaskProvider extends ChangeNotifier {
         .collection(todayDocId)
         .doc(nric);
 
-    String badgeField = 'badge$milestone';
+    // Check if the document exists; if not, initialize it
+    final docSnapshot = await ref.get();
+    if (!docSnapshot.exists) {
+      print('Points document for $staffName on $todayDocId does not exist. Initializing...');
+      await _initializePointsForStaff(staffName);
+    }
+
+    String badgeField = 'badge${milestone.toStringAsFixed(0)}';
     try {
-      await ref.update({badgeField: FieldValue.increment(1)});
+      await ref.update({badgeField: FieldValue.increment(1.0)});
       print('Incremented badge$milestone for $staffName');
+      // Update local state
+      staffBadges[staffName] ??= {
+        'badge45': 0.0,
+        'badge55': 0.0,
+        'badge65': 0.0,
+        'badge75': 0.0,
+        'badge85': 0.0,
+      };
+      staffBadges[staffName]![badgeField] = (staffBadges[staffName]![badgeField] ?? 0.0) + 1.0;
+      notifyListeners();
     } catch (e) {
       print('Error incrementing badge$milestone for $staffName: $e');
     }
@@ -857,10 +902,8 @@ class TaskProvider extends ChangeNotifier {
         String? assignee = data['assigned'] as String?;
         String? assistant1 = data['assistant1'] as String?;
         String? assistant2 = data['assistant2'] as String?;
-        int points = data['points'] ?? 0;
-        final taskDate = DateTime.parse(data['date']); // get from Firestore task
-        String taskDocId = DateFormat('yyyyMMdd').format(taskDate);
-        print('Task\'s date ID: $taskDocId');
+        double points = parsePoints(data['points']);
+        String todayDocId = DateFormat('yyyyMMdd').format(DateTime.now());
 
         Future<void> ensurePointsDoc(String staff) async {
           String normalizedStaff = capitalizeEachWord(staff);
@@ -869,7 +912,7 @@ class TaskProvider extends ChangeNotifier {
             final ref = FirebaseFirestore.instance
                 .collection('points')
                 .doc('staff')
-                .collection(taskDocId)
+                .collection(todayDocId)
                 .doc(nric);
             final docSnapshot = await ref.get();
             if (!docSnapshot.exists) {
@@ -882,10 +925,33 @@ class TaskProvider extends ChangeNotifier {
                 throw e;
               }
             } else {
-              print('Points document already exists for $normalizedStaff');
+              print('Points document already exists for $normalizedStaff on $todayDocId');
             }
           } else {
             print('Staff $normalizedStaff not found in _staffNrics or is "none"');
+          }
+        }
+
+        Future<void> updatePointsInFirestore(String staff, double points) async {
+          String normalizedStaff = capitalizeEachWord(staff);
+          if (staff != 'none' && _staffNrics.containsKey(normalizedStaff)) {
+            String nric = _staffNrics[normalizedStaff]!;
+            final ref = FirebaseFirestore.instance
+                .collection('points')
+                .doc('staff')
+                .collection(todayDocId)
+                .doc(nric);
+            print('Incrementing points for $normalizedStaff (NRIC: $nric) by $points on $todayDocId');
+            try {
+              await ref.update({
+                'dailyPoints': FieldValue.increment(points),
+                'monthlyPoints': FieldValue.increment(points),
+              });
+              print('Points updated for $normalizedStaff in Firestore on $todayDocId');
+            } catch (e) {
+              print('Failed to update points in Firestore for $normalizedStaff: $e');
+              throw e;
+            }
           }
         }
 
@@ -893,43 +959,41 @@ class TaskProvider extends ChangeNotifier {
         if (assistant1 != null) await ensurePointsDoc(assistant1);
         if (assistant2 != null) await ensurePointsDoc(assistant2);
 
-        Future<void> updatePointsInFirestore(String staff, int points) async {
-          String normalizedStaff = capitalizeEachWord(staff);
-          if (staff != 'none' && _staffNrics.containsKey(normalizedStaff)) {
-            String nric = _staffNrics[normalizedStaff]!;
-            staffDailyPoints[normalizedStaff] = (staffDailyPoints[normalizedStaff] ?? 0) + points;
-            staffMonthlyPoints[normalizedStaff] = (staffMonthlyPoints[normalizedStaff] ?? 0) + points;
-
-            final ref = FirebaseFirestore.instance
-                .collection('points')
-                .doc('staff')
-                .collection(taskDocId)
-                .doc(nric);
-            print('Incrementing points for $normalizedStaff (NRIC: $nric) by $points');
-            try {
-              await ref.update({
-                'dailyPoints': FieldValue.increment(points),
-                'monthlyPoints': FieldValue.increment(points),
-              });
-              print('Points updated for $normalizedStaff in Firestore');
-            } catch (e) {
-              print('Failed to update points in Firestore for $normalizedStaff: $e');
-              staffDailyPoints[normalizedStaff] = (staffDailyPoints[normalizedStaff] ?? points) - points;
-              staffMonthlyPoints[normalizedStaff] = (staffMonthlyPoints[normalizedStaff] ?? points) - points;
-              rethrow;
-            }
-            await _updateDeficitAfterTask(normalizedStaff, nric, taskDocId);
-          }
-        }
-
-        if (assignee != null) await updatePointsInFirestore(capitalizeEachWord(assignee), points);
-        if (assistant1 != null) await updatePointsInFirestore(capitalizeEachWord(assistant1), points);
-        if (assistant2 != null) await updatePointsInFirestore(capitalizeEachWord(assistant2), points);
+        if (assignee != null) await updatePointsInFirestore(assignee, points);
+        if (assistant1 != null && assistant1 != 'none') await updatePointsInFirestore(assistant1, points);
+        if (assistant2 != null && assistant2 != 'none') await updatePointsInFirestore(assistant2, points);
         
         notifyListeners();
       }
     } catch (e) {
       print('Error completing task: $e');
+    }
+  }
+
+  Future<void> debugPointsState(String staffName) async {
+    print('Debugging points state for $staffName');
+    String nric = _staffNrics[staffName] ?? 'unknown';
+    print('NRIC: $nric');
+    print('Local state:');
+    print('  dailyPoints: ${staffDailyPoints[staffName]}');
+    print('  monthlyPoints: ${staffMonthlyPoints[staffName]}');
+    print('  dailyDeficit: ${staffDailyDeficit[staffName]}');
+    print('  lastDailyResetDate: ${staffLastDailyResetDate[staffName]}');
+    print('  lastMonthlyResetDate: ${staffLastMonthlyResetDate[staffName]}');
+
+    String todayDocId = DateFormat('yyyyMMdd').format(DateTime.now());
+    final ref = FirebaseFirestore.instance
+        .collection('points')
+        .doc('staff')
+        .collection(todayDocId)
+        .doc(nric);
+    final snapshot = await ref.get();
+    print('Firestore state:');
+    if (snapshot.exists) {
+      print('  Document exists: points/staff/$todayDocId/$nric');
+      print('  Data: ${snapshot.data()}');
+    } else {
+      print('  Document does not exist: points/staff/$todayDocId/$nric');
     }
   }
 
@@ -941,10 +1005,10 @@ class TaskProvider extends ChangeNotifier {
       if (normalized == 'none' || !_staffNrics.containsKey(normalized)) return;
 
       final nric = _staffNrics[normalized]!;
-      staffDailyPoints[normalized] = (staffDailyPoints[normalized] ?? 0) - points;
-      staffMonthlyPoints[normalized] = (staffMonthlyPoints[normalized] ?? 0) - points;
-      if (staffDailyPoints[normalized]! < 0) staffDailyPoints[normalized] = 0;
-      if (staffMonthlyPoints[normalized]! < 0) staffMonthlyPoints[normalized] = 0;
+      staffDailyPoints[normalized] = (staffDailyPoints[normalized] ?? 0.0) - points;
+      staffMonthlyPoints[normalized] = (staffMonthlyPoints[normalized] ?? 0.0) - points;
+      if (staffDailyPoints[normalized]! < 0) staffDailyPoints[normalized] = 0.0;
+      if (staffMonthlyPoints[normalized]! < 0) staffMonthlyPoints[normalized] = 0.0;
 
       try {
         await FirebaseFirestore.instance
@@ -979,24 +1043,31 @@ class TaskProvider extends ChangeNotifier {
         .doc('staff')
         .collection(todayDocId)
         .doc(nric);
-    int currentDeficit = 0;
+    double currentDeficit = 0.0;
     try {
       final snapshot = await ref.get();
       if (snapshot.exists) {
-        currentDeficit = snapshot.data()!['dailyDeficit']?.toInt() ?? 0;
+        currentDeficit = snapshot.data()!['dailyDeficit']?.toDouble() ?? 0.0;
       }
     } catch (e) {
       print('Error fetching current deficit for $staff: $e');
     }
 
-    int taskPoints = staffDailyPoints[staff] ?? 0;
-    int updatedDeficit = currentDeficit - taskPoints;
-    if (updatedDeficit < 0) updatedDeficit = 0;
+    double taskPoints = staffDailyPoints[staff] ?? 0.0;
+    double updatedDeficit = currentDeficit - taskPoints;
+    if (updatedDeficit < 0) updatedDeficit = 0.0;
     staffDailyDeficit[staff] = updatedDeficit;
 
-    print('Mid-day deficit update for $staff: taskPoints=$taskPoints, updatedDeficit=$updatedDeficit');
+    print('Mid-day deficit update for $staff: taskPoints=$taskPoints, currentDeficit=$currentDeficit, updatedDeficit=$updatedDeficit');
 
-    await _updatePointsInFirestore(staff, nric, todayDocId);
+    try {
+      await ref.update({
+        'dailyDeficit': updatedDeficit,
+      });
+      print('Deficit updated for $staff to $updatedDeficit on $todayDocId');
+    }   catch (e) {
+      print('Error updating deficit for $staff: $e');
+    }
   }
 
   Future<void> checkPoints(String staffName) async {
@@ -1294,8 +1365,8 @@ class TaskProvider extends ChangeNotifier {
     return _clockRecords.where((record) => record['userName'] == userName).toList();
   }
 
-  int getTrencheTargetPoints(String trenche) {
-    return _trencheTargetPoints[trenche] ?? 53;
+  double getTrencheTargetPoints(String trenche) {
+    return _trencheTargetPoints[trenche] ?? 53.0;
   }
 
   void setSelectedTrenche(String staffName, String trenche) {
@@ -1315,7 +1386,7 @@ class TaskProvider extends ChangeNotifier {
     return staffSelectedTrenche[staffName] ?? "50";
   }
 
-  int getStaffInProgressPoints(String staffName, {DateTime? date}) {
+  double getStaffInProgressPoints(String staffName, {DateTime? date}) {
     final filterDate = date ?? DateTime.now();
     return _assignedTasks.where((task) {
       if (task["assignee"] != staffName || task["date"] == null) return false;
@@ -1327,10 +1398,10 @@ class TaskProvider extends ChangeNotifier {
       } catch (_) {
         return false;
       }  
-    }).fold<int>(0, (sum, task) => sum + (int.tryParse(task["points"].toString()) ?? 0));
+    }).fold<double>(0.0, (sum, task) => sum + (task["points"]?.toDouble() ?? 0.0));
   }
 
-  int getStaffDailyPoints(String staffName, {DateTime? date}) {
+  double getStaffDailyPoints(String staffName, {DateTime? date}) {
     if (date != null) {
       return _completedTasks.where((task) {
         if (task["assignee"] != staffName || task["date"] == null) return false;
@@ -1342,27 +1413,27 @@ class TaskProvider extends ChangeNotifier {
         } catch (_) {
           return false;
         }
-      }).fold(0, (sum, task) => sum + (int.tryParse(task["points"].toString()) ?? 0));
+      }).fold(0.0, (sum, task) => sum + (task["points"]?.toDouble() ?? 0.0));
     }
-    return staffDailyPoints[staffName] ?? 0;
+    return staffDailyPoints[staffName] ?? 0.0;
   }
 
-  int getStaffMonthlyPoints(String staffName) {
-    return staffMonthlyPoints[staffName] ?? 0;
+  double getStaffMonthlyPoints(String staffName) {
+    return staffMonthlyPoints[staffName] ?? 0.0;
   }
 
-  int getStaffDailyDeficit(String staffName) {
-    print('getStaffDailyDeficit for $staffName: ${staffDailyDeficit[staffName] ?? 0}');
-    return staffDailyDeficit[staffName] ?? 0;
+  double getStaffDailyDeficit(String staffName) {
+    print('getStaffDailyDeficit for $staffName: ${staffDailyDeficit[staffName] ?? 0.0}');
+    return staffDailyDeficit[staffName] ?? 0.0;
   }
 
-  int getBaseTargetPoints(String staffName) {
+  double getBaseTargetPoints(String staffName) {
     String trenche = staffSelectedTrenche[staffName] ?? "50";
-    return _trencheTargetPoints[trenche] ?? 53;
+    return _trencheTargetPoints[trenche] ?? 53.0;
   }
 
-  int getTargetPoints(String staffName) {
-    int baseTarget = getBaseTargetPoints(staffName);
+  double getTargetPoints(String staffName) {
+    double baseTarget = getBaseTargetPoints(staffName);
     return baseTarget;
   }
 
@@ -1425,9 +1496,9 @@ class TaskProvider extends ChangeNotifier {
   }
 
   List<Map<String, dynamic>> suggestTasks(String staffName, {int maxSuggestions = 3}) {
-    int targetPoints = getTargetPoints(staffName);
-    int currentPoints = getStaffDailyPoints(staffName);
-    int remainingPoints = targetPoints - currentPoints;
+    double targetPoints = getTargetPoints(staffName);
+    double currentPoints = getStaffDailyPoints(staffName);
+    double remainingPoints = targetPoints - currentPoints;
 
     if (remainingPoints <= 0) {
       return [];

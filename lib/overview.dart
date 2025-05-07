@@ -4,6 +4,7 @@ import 'package:provider/provider.dart';
 import 'package:lottie/lottie.dart';
 import 'package:cloud_firestore/cloud_firestore.dart';
 import 'package:catzoteam/provider.dart';
+import 'package:catzoteam/models/double.dart';
 import 'package:catzoteam/models/painter.dart';
 import 'package:catzoteam/models/task_category.dart'; 
 import 'package:intl/intl.dart';
@@ -29,12 +30,12 @@ class _OverviewScreenState extends State<OverviewScreen> with TickerProviderStat
   String _errorMessage = '';
   List<int> _congratulatedMilestones = []; 
   
-  final Map<int, Map<String, dynamic>> badgeData = {
-    45: {"icon": Icons.star_border, "color": Colors_bronze, "label": "Bronze Starter"},
-    55: {"icon": Icons.military_tech, "color": Colors.grey, "label": "Silver Achiever"},
-    65: {"icon": Icons.workspace_premium, "color": Colors.amber, "label": "Golden Performer"},
-    75: {"icon": Icons.diamond, "color": Colors.blue, "label": "Diamond Elite"},
-    85: {"icon": Icons.emoji_events, "color": Colors.deepPurple, "label": "Champion Badge"},
+  final Map<double, Map<String, dynamic>> badgeData = {
+    45.0: {"icon": Icons.star_border, "color": Colors_bronze, "label": "Bronze Starter"},
+    55.0: {"icon": Icons.military_tech, "color": Colors.grey, "label": "Silver Achiever"},
+    65.0: {"icon": Icons.workspace_premium, "color": Colors.amber, "label": "Golden Performer"},
+    75.0: {"icon": Icons.diamond, "color": Colors.blue, "label": "Diamond Elite"},
+    85.0: {"icon": Icons.emoji_events, "color": Colors.deepPurple, "label": "Champion Badge"},
   };
 
   final List<Map<String, dynamic>> categories = kTaskCategories.map((cat) {
@@ -122,21 +123,22 @@ class _OverviewScreenState extends State<OverviewScreen> with TickerProviderStat
     return baseHeight;
   }
   
-  void _checkAndAddEarnedBadges(int dailyPoints) {
-    const milestones = [45, 55, 65, 75, 85];
+  void _checkAndAddEarnedBadges(double dailyPoints) {
+    const List<double> milestones = [45.0, 55.0, 65.0, 75.0, 85.0];
     
-    for (int milestone in milestones) {
-      if (dailyPoints >= milestone && !_congratulatedMilestones.contains(milestone)) {
+    for (double milestone in milestones) {
+      int milestoneInt = milestone.toInt();
+      if (dailyPoints >= milestone && !_congratulatedMilestones.contains(milestoneInt)) {
         setState(() {
-          _congratulatedMilestones.add(milestone);
+          _congratulatedMilestones.add(milestoneInt);
         });
 
         // Only increment badge if NOT already earned today
         final taskProvider = Provider.of<TaskProvider>(context, listen: false);
-        Map<String, int> badges = taskProvider.getStaffBadges(widget.userName);
-        String badgeField = 'badge$milestone';
+        Map<String, double> badges = taskProvider.getStaffBadges(widget.userName);
+        String badgeField = 'badge${milestone.toStringAsFixed(0)}';
 
-        if ((badges[badgeField] ?? 0) == 0) {
+        if ((badges[badgeField] ?? 0.0) == 0.0) {
           taskProvider.incrementBadge(widget.userName, milestone);
         } else {
           print('Badge $badgeField already earned today, skip increment');
@@ -145,7 +147,7 @@ class _OverviewScreenState extends State<OverviewScreen> with TickerProviderStat
     }
   }
 
-  void _showBadgeDetailDialog(int milestone, String label) {
+  void _showBadgeDetailDialog(double milestone, String label) {
     showDialog(
       context: context,
       builder: (context) {
@@ -153,7 +155,7 @@ class _OverviewScreenState extends State<OverviewScreen> with TickerProviderStat
           shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(15)),
           title: Text("🎖 $label"),
           content: Text(
-            "You have earned the '$label' badge by achieving $milestone daily points!\n\nKeep collecting more badges for rewards!",
+            "You have earned the '$label' badge by achieving ${milestone.toStringAsFixed(0)} daily points!\n\nKeep collecting more badges for rewards!",
             style: const TextStyle(fontSize: 16, color: Colors.black87),
           ),
           actions: [
@@ -167,11 +169,11 @@ class _OverviewScreenState extends State<OverviewScreen> with TickerProviderStat
     );
   }
 
-  void _checkWarningMilestones(int dailyPoints) {
+  void _checkWarningMilestones(double dailyPoints) {
     final now = TimeOfDay.now();
     final timeValue = Duration(hours: now.hour, minutes: now.minute);
 
-    if (timeValue >= const Duration(hours: 12, minutes: 30) && dailyPoints < 20 && !_triggeredWarnings.contains(20)) {
+    if (timeValue >= const Duration(hours: 12, minutes: 30) && dailyPoints < 20.0 && !_triggeredWarnings.contains(20)) {
       setState(() {
         _triggeredWarnings.add(20);
       });
@@ -179,7 +181,7 @@ class _OverviewScreenState extends State<OverviewScreen> with TickerProviderStat
       print("⚠️ Warning: <20 points after 12:30pm");
     }
 
-    if (timeValue >= const Duration(hours: 16, minutes: 0) && dailyPoints < 40 && !_triggeredWarnings.contains(40)) {
+    if (timeValue >= const Duration(hours: 16, minutes: 0) && dailyPoints < 40.0 && !_triggeredWarnings.contains(40)) {
       setState(() {
         _triggeredWarnings.add(40);
       });
@@ -246,11 +248,11 @@ class _OverviewScreenState extends State<OverviewScreen> with TickerProviderStat
   Widget _buildProfileCard() {
     return Consumer<TaskProvider>(
       builder: (context, taskProvider, child) {
-        int monthlyPoints = taskProvider.getStaffMonthlyPoints(widget.userName);
+        double monthlyPoints = taskProvider.getStaffMonthlyPoints(widget.userName);
         String selectedTrenche = taskProvider.getSelectedTrenche(widget.userName);
-        int dailyDeficit = taskProvider.getStaffDailyDeficit(widget.userName);
-        int dailyPoints = taskProvider.getStaffDailyPoints(widget.userName);
-        int targetPoints = taskProvider.getTargetPoints(widget.userName);
+        double dailyDeficit = taskProvider.getStaffDailyDeficit(widget.userName);
+        double dailyPoints = taskProvider.getStaffDailyPoints(widget.userName);
+        double targetPoints = taskProvider.getTargetPoints(widget.userName);
 
         WidgetsBinding.instance.addPostFrameCallback((_) {
           _checkAndAddEarnedBadges(dailyPoints);
@@ -327,7 +329,7 @@ class _OverviewScreenState extends State<OverviewScreen> with TickerProviderStat
                             ),
                           ),
                           Text(
-                            '$dailyPoints / $targetPoints',
+                            '${dailyPoints.toStringAsFixed(1)} / ${targetPoints.toStringAsFixed(1)}',
                             style: const TextStyle(
                               fontSize: 12,
                               color: Colors.black54,
@@ -435,7 +437,7 @@ class _OverviewScreenState extends State<OverviewScreen> with TickerProviderStat
                                     ),
                                   ),
                                   Text(
-                                    '$monthlyPoints',
+                                    monthlyPoints.toStringAsFixed(1),
                                     style: const TextStyle(
                                       fontSize: 14,
                                       color: Colors.black87,
@@ -475,7 +477,7 @@ class _OverviewScreenState extends State<OverviewScreen> with TickerProviderStat
                                     ),
                                   ),
                                   Text(
-                                    '$dailyDeficit',
+                                    dailyDeficit.toStringAsFixed(1),
                                     style: TextStyle(
                                       fontSize: 14,
                                       color: dailyDeficit > 0 ? Colors.red : Colors.black87,
@@ -520,17 +522,17 @@ class _OverviewScreenState extends State<OverviewScreen> with TickerProviderStat
     );
   }
 
-  Widget _buildDailyProgressBar(int dailyPoints, int targetPoints) {
+  Widget _buildDailyProgressBar(double dailyPoints, double targetPoints) {
     final taskProvider = Provider.of<TaskProvider>(context, listen: false);
-    const List<int> milestones = [45, 55, 65, 75, 85];
-    const double maxPoints = 85;
+    const List<double> milestones = [45.0, 55.0, 65.0, 75.0, 85.0];
+    const double maxPoints = 85.0;
 
     // Calculate progress based on dailyPoints
     double progress = (dailyPoints / maxPoints).clamp(0.0, 1.0);
 
     // Trigger milestone dialog for daily points
-    for (int milestone in milestones) {
-      if (dailyPoints >= milestone && dailyPoints < milestone + 1) {
+    for (double milestone in milestones) {
+      if (dailyPoints >= milestone && dailyPoints < milestone + 0.1) {
         WidgetsBinding.instance.addPostFrameCallback((_) {
           _showMilestoneDialog(context, milestone);
         });
@@ -550,7 +552,7 @@ class _OverviewScreenState extends State<OverviewScreen> with TickerProviderStat
               child: CustomPaint(
               painter: RoundedLinearProgressPainter(
                 value,
-                (taskProvider.getStaffInProgressPoints(widget.userName) / 85).clamp(0.0, 1.0),
+                (taskProvider.getStaffInProgressPoints(widget.userName) / 85.0).clamp(0.0, 1.0),
                 ),
               ),
             );
@@ -567,12 +569,12 @@ class _OverviewScreenState extends State<OverviewScreen> with TickerProviderStat
                 children: [
                   // Milestone labels
                   ... milestones.asMap().entries.map((entry) {
-                    int milestone = entry.value;
+                    double milestone = entry.value;
                     double fraction = milestone / maxPoints;
                     bool isReached = dailyPoints >= milestone;
 
                     double leftPosition;
-                    if (milestone == 85) {
+                    if (milestone == 85.0) {
                       leftPosition = availableWidth - 22.5;
                     } else {
                       leftPosition = fraction * availableWidth - 15;
@@ -584,7 +586,7 @@ class _OverviewScreenState extends State<OverviewScreen> with TickerProviderStat
                         width: 30,
                         child: Center(
                           child: Text(
-                            milestone.toString(),
+                            milestone.toStringAsFixed(0),
                             style: TextStyle(
                               color: isReached ? Colors.deepOrange : Colors.black38,
                               fontSize: 14,
@@ -604,10 +606,11 @@ class _OverviewScreenState extends State<OverviewScreen> with TickerProviderStat
     );
   }
 
-  void _showMilestoneDialog(BuildContext context, int milestone) {
-    if (_congratulatedMilestones.contains(milestone)) return;
+  void _showMilestoneDialog(BuildContext context, double milestone) {
+    int milestoneInt = milestone.toInt();
+    if (_congratulatedMilestones.contains(milestoneInt)) return;
 
-    _congratulatedMilestones.add(milestone);
+    _congratulatedMilestones.add(milestoneInt);
 
     showDialog(
       context: context,
@@ -622,7 +625,7 @@ class _OverviewScreenState extends State<OverviewScreen> with TickerProviderStat
             children: [
               Lottie.asset('assets/congratulations.json', repeat: false, height: 120),
               const SizedBox(height: 16),
-              Text("You've reached the $milestone points milestone today! Keep it up!",
+              Text("You've reached the ${milestone.toStringAsFixed(0)} points milestone today! Keep it up!",
                 style: const TextStyle(fontSize: 16, color: Colors.black54),
               ),
             ],
@@ -686,10 +689,10 @@ class _OverviewScreenState extends State<OverviewScreen> with TickerProviderStat
   Widget _buildBadgeRow() {
     return Consumer<TaskProvider>(
       builder: (context, taskProvider, child) {
-        Map<String, int> badges = taskProvider.getStaffBadges(widget.userName);
+        Map<String, double> badges = taskProvider.getStaffBadges(widget.userName);
 
         // Filter badges that have count > 0
-        List<MapEntry<String, int>> earnedBadges = badges.entries
+        List<MapEntry<String, double>> earnedBadges = badges.entries
             .where((entry) => entry.value > 0)
             .toList();
 
@@ -704,8 +707,8 @@ class _OverviewScreenState extends State<OverviewScreen> with TickerProviderStat
           spacing: 10,
           runSpacing: 10,
           children: earnedBadges.map((entry) {
-            int milestone = int.parse(entry.key.replaceAll('badge', ''));
-            int count = entry.value;
+            double milestone = double.parse(entry.key.replaceAll('badge', ''));
+            double count = entry.value;
             final badge = badgeData[milestone];
 
             if (badge == null) return const SizedBox();
@@ -758,9 +761,9 @@ class _OverviewScreenState extends State<OverviewScreen> with TickerProviderStat
   Widget _buildStatsAndSuggestionsCard() {
     return Consumer<TaskProvider>(
       builder: (context, taskProvider, child) {
-        int targetPoints = taskProvider.getTargetPoints(widget.userName);
-        int currentPoints = taskProvider.getStaffDailyPoints(widget.userName);
-        int remainingPoints = targetPoints - currentPoints;
+        double targetPoints = taskProvider.getTargetPoints(widget.userName);
+        double currentPoints = taskProvider.getStaffDailyPoints(widget.userName);
+        double remainingPoints = targetPoints - currentPoints;
 
         List<Map<String, dynamic>> suggestedTasks = taskProvider.suggestTasks(widget.userName);
 
@@ -801,7 +804,7 @@ class _OverviewScreenState extends State<OverviewScreen> with TickerProviderStat
               const SizedBox(height: 10),
               Column(
                 crossAxisAlignment: CrossAxisAlignment.stretch,
-                children: suggestedTasks.map((task) => _buildSuggestedTaskCard(task)).toList(),
+                children: suggestedTasks.map((task) => _buildSuggestedTaskCard(task, taskProvider)).toList(),
               ),
             ],
           ),
@@ -810,7 +813,7 @@ class _OverviewScreenState extends State<OverviewScreen> with TickerProviderStat
     );
   }
 
-  Widget _buildSuggestedTaskCard(Map<String, dynamic> task) {
+  Widget _buildSuggestedTaskCard(Map<String, dynamic> task, TaskProvider taskProvider) {
     Color taskColor = _getTaskColor(task);
     return Container(
       margin: const EdgeInsets.symmetric(vertical: 6),
@@ -855,7 +858,7 @@ class _OverviewScreenState extends State<OverviewScreen> with TickerProviderStat
                       borderRadius: BorderRadius.circular(7),
                     ),
                     child: Text(
-                      '${task["points"] ?? 0} pts',
+                      '${formatDouble(parsePoints(task["points"]))} pts',
                       style: TextStyle(
                         color: Colors.green[900],
                         fontWeight: FontWeight.w600,
@@ -923,7 +926,7 @@ class _OverviewScreenState extends State<OverviewScreen> with TickerProviderStat
                                             Icon(Icons.star, color: Colors.green[700], size: 20),
                                             const SizedBox(width: 6),
                                             Text(
-                                              "${task["points"]} Points",
+                                              "${formatDouble(parsePoints(task["points"]))} Points",
                                               style: TextStyle(
                                                 fontSize: 16,
                                                 color: Colors.green[800],
@@ -977,7 +980,6 @@ class _OverviewScreenState extends State<OverviewScreen> with TickerProviderStat
                                           elevation: 2,
                                         ),
                                         onPressed: () {
-                                          final taskProvider = Provider.of<TaskProvider>(context, listen: false);
                                           taskProvider.assignTask(task, widget.userName);
                                           Navigator.of(context).pop();
                                           ScaffoldMessenger.of(context).showSnackBar(
@@ -1149,7 +1151,7 @@ class _OverviewScreenState extends State<OverviewScreen> with TickerProviderStat
                                     borderRadius: BorderRadius.circular(7),
                                   ),
                                   child: Text(
-                                    '${task['points'] ?? 0} pts',
+                                    '${formatDouble(parsePoints(task['points'] ?? 0))} pts',
                                     style: TextStyle(color: Colors.red[900], fontWeight: FontWeight.w600),
                                   ),
                                 ),
@@ -1241,11 +1243,13 @@ class _OverviewScreenState extends State<OverviewScreen> with TickerProviderStat
                             flex: 20,
                             child: Column(
                               children: taskSlice.map((task) {
+                                // Updated line to handle double points
+                                double points = parsePoints(task["points"]);
                                 return _slidableTaskCard(
                                   task['taskID'],
                                   task['task'],
                                   task['catName'] ?? '',
-                                  int.tryParse(task["points"].toString()) ?? 0,
+                                  points,
                                   _getTaskColor(task),
                                   taskProvider,
                                   (task["taskID"] ?? '').startsWith("GR"),
@@ -1390,7 +1394,7 @@ class _OverviewScreenState extends State<OverviewScreen> with TickerProviderStat
                                           borderRadius: BorderRadius.circular(7),
                                         ),
                                         child: Text(
-                                          '${task['points'] ?? 0} pts',
+                                          '${formatDouble(parsePoints(task['points'] ?? 0))} pts',
                                           style: TextStyle(color: Colors.green[900], fontWeight: FontWeight.w600),
                                         ),
                                       ),
@@ -1436,7 +1440,7 @@ class _OverviewScreenState extends State<OverviewScreen> with TickerProviderStat
     String id,
     String title,
     String catName,
-    int points,
+    double points,
     Color color,
     TaskProvider taskProvider,
     bool isGroomingTask, {
@@ -1731,7 +1735,7 @@ class _OverviewScreenState extends State<OverviewScreen> with TickerProviderStat
                           borderRadius: BorderRadius.circular(7),
                         ),
                         child: Text(
-                          '$points pts',
+                          '${formatDouble(points)} pts',
                           style: TextStyle(
                             color: Colors.green[900],
                             fontWeight: FontWeight.w600,

@@ -4,6 +4,7 @@ import 'package:cloud_firestore/cloud_firestore.dart';
 import 'package:flutter_slidable/flutter_slidable.dart';
 import 'package:collection/collection.dart';
 import 'package:catzoteam/provider.dart';
+import 'package:catzoteam/models/double.dart';
 import 'package:catzoteam/models/painter.dart';
 import 'package:catzoteam/widgets/staff_selector_dialog.dart';
 import 'package:catzoteam/models/task_category.dart'; 
@@ -175,7 +176,7 @@ class _ManagerScreenState extends State<ManagerScreen> {
   void _showFuturePlanningProgress(TaskProvider taskProvider) {
     final DateTime date = selectedDate;
     final totalStaff = staffMembers.length;
-    final totalTargetPoints = totalStaff * 30;
+    final totalTargetPoints = totalStaff * 30.0;
     final totalPlannedPoints = taskProvider.assignedTasks.where((task) {
       if (task["date"] == null) return false;
       try {
@@ -186,7 +187,7 @@ class _ManagerScreenState extends State<ManagerScreen> {
       } catch (_) {
         return false;
       }
-    }).fold<int>(0, (sum, task) => sum + (int.tryParse(task["points"].toString()) ?? 0));
+    }).fold<double>(0.0, (sum, task) => sum + (task["points"]?.toDouble() ?? 0.0));
 
     final percentage = totalTargetPoints > 0
         ? (totalPlannedPoints / totalTargetPoints).clamp(0.0, 1.0)
@@ -216,7 +217,7 @@ class _ManagerScreenState extends State<ManagerScreen> {
     Overlay.of(context, rootOverlay: true).insert(_futurePopup!);
   }
 
-  Widget _buildFloatingPopup(double percentage, int planned, int target) {
+  Widget _buildFloatingPopup(double percentage, double planned, double target) {
     return Material(
       elevation: 10,
       color: Colors.transparent,
@@ -301,14 +302,14 @@ class _ManagerScreenState extends State<ManagerScreen> {
     String? selectedCategory;
     String? selectedTask;
     String? selectedSubtask;
-    int basePoints = 0;
+    double basePoints = 0;
     final TextEditingController catNameController = TextEditingController();
     final TextEditingController taskNameController = TextEditingController();
     final ValueNotifier<String?> taskNameNotifier = ValueNotifier<String?>(null);
     DateTime selectedDate = this.selectedDate;
     TimeOfDay selectedTime = TimeOfDay.now();
     String priority = "normal";
-    int points = 0;
+    double points = 0;
     String generatedTaskId = '';
 
     List<Map<String, dynamic>> categoriesList = [];
@@ -346,7 +347,7 @@ class _ManagerScreenState extends State<ManagerScreen> {
                 }
 
                 dynamic pointValue = task['point'];
-                int point = pointValue is num ? pointValue.toInt() : (int.tryParse(pointValue?.toString() ?? '0') ?? 0);
+                double point = parsePoints(pointValue);
 
                 categoryTasks.add({
                   "title": task['taskName'] as String,
@@ -362,7 +363,7 @@ class _ManagerScreenState extends State<ManagerScreen> {
                     }
 
                     dynamic additionalPtsValue = subtask.containsKey('additionalPts') ? subtask['additionalPts'] : 0;
-                    int additionalPts = additionalPtsValue is num ? additionalPtsValue.toInt() : (int.tryParse(additionalPtsValue?.toString() ?? '0') ?? 0);
+                    double additionalPts = parsePoints(additionalPtsValue);
 
                     subtaskList.add({
                       "title": subtask['name'] as String,
@@ -406,7 +407,7 @@ class _ManagerScreenState extends State<ManagerScreen> {
           return;
         }
 
-        basePoints = taskData["points"] as int;
+        basePoints = taskData["points"] as double;
         WidgetsBinding.instance.addPostFrameCallback((_) {
           taskNameNotifier.value = selectedTask;
         });
@@ -417,7 +418,7 @@ class _ManagerScreenState extends State<ManagerScreen> {
             WidgetsBinding.instance.addPostFrameCallback((_) {
               taskNameNotifier.value = subtaskData["title"] as String;
             });
-            points = basePoints + (subtaskData["points"] as int);
+            points = basePoints + (subtaskData["points"] as double);
           } else {
             points = basePoints;
           }
@@ -615,7 +616,7 @@ class _ManagerScreenState extends State<ManagerScreen> {
                                               border: Border.all(color: Colors.green),
                                             ),
                                             child: Text(
-                                              "${task["points"]} pts",
+                                              "${formatDouble(task["points"])} pts",
                                               style: const TextStyle(fontSize: 12, color: Colors.green),
                                             ),
                                           )
@@ -680,7 +681,7 @@ class _ManagerScreenState extends State<ManagerScreen> {
                                                 border: Border.all(color: Colors.green),
                                               ),
                                               child: Text(
-                                                "${subtask["points"]} pts",
+                                                "${formatDouble(subtask["points"])} pts",
                                                 style: const TextStyle(fontSize: 12, color: Colors.green),
                                               ),
                                             )
@@ -1005,7 +1006,6 @@ class _ManagerScreenState extends State<ManagerScreen> {
                     return ElevatedButton(
                       onPressed: isAddTaskEnabled
                           ? () async {
-                              // Your existing task creation logic stays the same
                               final categoryKey = categoriesList.firstWhereOrNull((cat) => cat['title'] == selectedCategory)?['value'] as String?;
                               if (categoryKey == null) {
                                 ScaffoldMessenger.of(context).showSnackBar(
@@ -1972,15 +1972,15 @@ class _ManagerScreenState extends State<ManagerScreen> {
           itemCount: staffMembers.length,
           itemBuilder: (context, index) {
             String staffName = staffMembers[index];
-            int currentPoints = taskProvider.getStaffDailyPoints(staffName, date: selectedDate);
-            int inProgressPoints = taskProvider.getStaffInProgressPoints(staffName, date: selectedDate);
-            int targetPoints = taskProvider.getTargetPoints(staffName);
+            double currentPoints = taskProvider.getStaffDailyPoints(staffName, date: selectedDate);
+            double inProgressPoints = taskProvider.getStaffInProgressPoints(staffName, date: selectedDate);
+            double targetPoints = taskProvider.getTargetPoints(staffName);
 
             print('Staff: $staffName, Daily Points: $currentPoints, Target: $targetPoints');
 
             double completedPercentage = targetPoints > 0 ? (currentPoints / targetPoints).clamp(0.0, 1.0) : 0.0;
             double inProgressPercentage = targetPoints > 0 ? (inProgressPoints / targetPoints).clamp(0.0, 1.0) : 0.0;
-            int pointsLeft = (targetPoints - currentPoints).clamp(0, targetPoints);
+            double pointsLeft = (targetPoints - currentPoints).clamp(0, targetPoints);
 
             return Container(
               padding: const EdgeInsets.all(10),
@@ -2432,7 +2432,7 @@ class _ManagerScreenState extends State<ManagerScreen> {
               const SizedBox(width: 3),
               Expanded(flex: 1, child: _tableCell(time)),
               const SizedBox(width: 3),
-              Expanded(flex: 1, child: _tableCell(task["points"].toString())),
+              Expanded(flex: 1, child: _tableCell(formatDouble(parsePoints(task["points"])))),
               const SizedBox(width: 3),
               Expanded(
                 flex: 1,
@@ -2664,7 +2664,7 @@ class _ManagerScreenState extends State<ManagerScreen> {
               const SizedBox(width: 8),
               Expanded(child: _tableCell(time)),
               const SizedBox(width: 8),
-              Expanded(child: _tableCell(task["points"].toString())),
+              Expanded(child: _tableCell(formatDouble(parsePoints(task["points"])))),
               const SizedBox(width: 8),
               Expanded(child: _tableCell(task["assignee"])),
               const SizedBox(width: 8),
@@ -2789,7 +2789,7 @@ class _ManagerScreenState extends State<ManagerScreen> {
               const SizedBox(width: 8),
               Expanded(child: _tableCell(time)),
               const SizedBox(width: 8),
-              Expanded(child: _tableCell(task["points"].toString())),
+              Expanded(child: _tableCell(formatDouble(parsePoints(task["points"])))),
               const SizedBox(width: 8),
               Expanded(child: _tableCell(task["assignee"])),
               const SizedBox(width: 8),
