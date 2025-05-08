@@ -14,8 +14,13 @@ import 'dart:math';
 
 class ManagerScreen extends StatefulWidget {
   final String selectedBranchCode;
+  final String userName;
 
-  const ManagerScreen({required this.selectedBranchCode, Key? key}) : super(key: key);
+  const ManagerScreen({
+    required this.selectedBranchCode, 
+    required this.userName,
+    Key? key,
+    }) : super(key: key);
 
   @override
   _ManagerScreenState createState() => _ManagerScreenState();
@@ -2600,81 +2605,109 @@ class _ManagerScreenState extends State<ManagerScreen> {
       } catch (_) {}
     }
 
-    return Padding(
-      padding: const EdgeInsets.symmetric(vertical: 4),
-      child: Slidable(
-        key: ValueKey(task["taskID"]),
-        closeOnScroll: true,
-        endActionPane: ActionPane(
-          motion: DrawerMotion(),
-          extentRatio: 0.20,
-          children: [
-            SlidableAction(
-              onPressed: (context) {
-                _showEditTaskDialog(context, task);
-              },
-              backgroundColor: Colors.grey[600]!,
-              foregroundColor: Colors.white,
-              icon: Icons.edit,
-              label: 'Edit',
-            ),
-            SlidableAction(
-              onPressed: (context) {
-                // Ensure task["date"] is set to today
-                final today = DateFormat('yyyy-MM-dd').format(DateTime.now());
-                if (task["date"] == null || task["date"].toString().isEmpty) {
-                  task["date"] = today;
-                }
-                print("Completing task ${task["taskID"]}, date=${task["date"]}");
+    bool isManagerAssignee = task["assignee"] == widget.userName;
 
-                taskProvider.completeTask(task["taskID"]);
-                ScaffoldMessenger.of(context).showSnackBar(
-                  SnackBar(
-                    content: Text("Task '${task["task"]}' completed."),
-                    duration: const Duration(seconds: 2),
+    return FutureBuilder<bool>(
+      future: isManagerAssignee ? taskProvider.isTomorrowPlanningComplete() : Future.value(true),
+      builder: (context, snapshot) {
+        bool isPlanningComplete = snapshot.data ?? false;
+        bool canCompleteTask = !isManagerAssignee || (isManagerAssignee && isPlanningComplete);
+
+        return Padding(
+          padding: const EdgeInsets.symmetric(vertical: 4),
+          child: Slidable(
+            key: ValueKey(task["taskID"]),
+            closeOnScroll: true,
+            endActionPane: ActionPane(
+              motion: DrawerMotion(),
+              extentRatio: 0.20,
+              children: [
+                SlidableAction(
+                  onPressed: (context) {
+                    _showEditTaskDialog(context, task);
+                  },  
+                  backgroundColor: Colors.grey[600]!,
+                  foregroundColor: Colors.white,
+                  icon: Icons.edit,
+                  label: 'Edit',
+                ),
+                if (canCompleteTask)
+                  SlidableAction(
+                    onPressed: (context) {
+                      // Ensure task["date"] is set to today
+                      final today = DateFormat('yyyy-MM-dd').format(DateTime.now());
+                      if (task["date"] == null || task["date"].toString().isEmpty) {
+                        task["date"] = today;
+                      }
+                      print("Completing task ${task["taskID"]}, date=${task["date"]}");
+
+                      taskProvider.completeTask(task["taskID"]);
+                      ScaffoldMessenger.of(context).showSnackBar(
+                        SnackBar(
+                          content: Text("Task '${task["task"]}' completed."),
+                          duration: const Duration(seconds: 2),
+                        ),
+                      );
+                    },
+                    backgroundColor: Colors.green,
+                    foregroundColor: Colors.white,
+                    icon: Icons.check_rounded,
+                    label: 'Complete',
                   ),
-                );
-              },
-              backgroundColor: Colors.green,
-              foregroundColor: Colors.white,
-              icon: Icons.check_rounded,
-              label: 'Complete',
+                if (!canCompleteTask)
+                  SlidableAction(
+                    onPressed: (context) {
+                      ScaffoldMessenger.of(context).showSnackBar(
+                        const SnackBar(
+                          content: Text("Please complete tomorrow's planning to mark tasks as complete."),
+                          duration: Duration(seconds: 3),
+                        ),
+                      );
+                    },
+                    backgroundColor: Colors.grey[400]!,
+                    foregroundColor: Colors.white,
+                    icon: Icons.lock,
+                    label: 'Locked',
+                  ),
+              ],  
             ),
-          ],
-        ),
-        child: Container(
-          decoration: BoxDecoration(
-            color: taskColor,
-            borderRadius: BorderRadius.circular(8),
-            boxShadow: const [
-              BoxShadow(color: Colors.black12, blurRadius: 2, offset: Offset(0, 2)),
-            ],
-          ),
-          padding: const EdgeInsets.all(12),
-          child: Row(
-            crossAxisAlignment: CrossAxisAlignment.center,
-            children: [
-              Expanded(child: _tableCell(task["taskID"])),
-              const SizedBox(width: 8),
-              Expanded(child: _tableCell(task["task"])),
-              const SizedBox(width: 8),
-              Expanded(child: _tableCell(formatCatName(task["catName"]))),
-              const SizedBox(width: 8),
-              Expanded(child: _tableCell(date)),
-              const SizedBox(width: 8),
-              Expanded(child: _tableCell(time)),
-              const SizedBox(width: 8),
-              Expanded(child: _tableCell(formatDouble(parsePoints(task["points"])))),
-              const SizedBox(width: 8),
-              Expanded(child: _tableCell(task["assignee"])),
-              const SizedBox(width: 8),
-              Expanded(child: _tableCell(_formatAssistant(task["assistant1"]))),
-              const SizedBox(width: 8),
-              Expanded(child: _tableCell(_formatAssistant(task["assistant2"]))),
-            ],
-          ),
-        ),
-      ),
+            child: Container(
+              decoration: BoxDecoration(
+                color: taskColor,
+                borderRadius: BorderRadius.circular(8),
+                boxShadow: const [
+                  BoxShadow(color: Colors.black12, blurRadius: 2, offset: Offset(0, 2)),
+                ],
+              ),
+              padding: const EdgeInsets.all(12),
+              child: IntrinsicHeight(
+                child: Row(
+                  crossAxisAlignment: CrossAxisAlignment.center,
+                  children: [
+                    Expanded(child: _tableCell(task["taskID"])),
+                    const SizedBox(width: 8),
+                    Expanded(child: _tableCell(task["task"])),
+                    const SizedBox(width: 8),
+                    Expanded(child: _tableCell(formatCatName(task["catName"]))),
+                    const SizedBox(width: 8),
+                    Expanded(child: _tableCell(date)),
+                    const SizedBox(width: 8),
+                    Expanded(child: _tableCell(time)),
+                    const SizedBox(width: 8),
+                    Expanded(child: _tableCell(formatDouble(parsePoints(task["points"])))),
+                    const SizedBox(width: 8),
+                    Expanded(child: _tableCell(task["assignee"])),
+                    const SizedBox(width: 8),
+                    Expanded(child: _tableCell(_formatAssistant(task["assistant1"]))),
+                    const SizedBox(width: 8),
+                    Expanded(child: _tableCell(_formatAssistant(task["assistant2"]))),
+                  ],
+                ),
+              ),
+            ), 
+          )  
+        );
+      },
     );
   }
 

@@ -159,7 +159,10 @@ class _HomeScreenState extends State<HomeScreen> {
     String userName = _authenticatedUserName ?? "Afeena Farhan";
     switch (index) {
       case 0:
-        return ManagerScreen(selectedBranchCode: _selectedBranchCode);
+        return ManagerScreen(
+          selectedBranchCode: _selectedBranchCode,
+          userName: userName,
+        );
       case 1:
         return OverviewScreen(
           role: "manager",
@@ -175,7 +178,10 @@ class _HomeScreenState extends State<HomeScreen> {
       case 4:
         return TrencheScreen();
       default:
-        return ManagerScreen(selectedBranchCode: _selectedBranchCode);
+        return ManagerScreen(
+          selectedBranchCode: _selectedBranchCode,
+          userName: userName,
+        );
     }
   }
 

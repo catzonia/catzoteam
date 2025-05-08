@@ -18,7 +18,11 @@ class OverviewScreen extends StatefulWidget {
   final String role;
   final String userName;
 
-  const OverviewScreen({this.role = "staff", this.userName = "Lathifah Husna", super.key});
+  const OverviewScreen({
+    this.role = "staff", 
+    this.userName = "Lathifah Husna", 
+    super.key
+  });
 
   @override
   _OverviewScreenState createState() => _OverviewScreenState();
@@ -765,7 +769,22 @@ class _OverviewScreenState extends State<OverviewScreen> with TickerProviderStat
         double currentPoints = taskProvider.getStaffDailyPoints(widget.userName);
         double remainingPoints = targetPoints - currentPoints;
 
-        List<Map<String, dynamic>> suggestedTasks = taskProvider.suggestTasks(widget.userName);
+        // Get today's date
+        DateTime today = DateTime.now();
+        String todayDateStr = DateFormat('yyyy-MM-dd').format(today);
+
+        // Filter suggested tasks to only include those for today and displayed
+        List<Map<String, dynamic>> suggestedTasks = taskProvider
+            .suggestTasks(widget.userName)
+            .where((task) {
+              try {
+                String taskDate = task['date'] ?? '';
+                return taskDate == todayDateStr;
+              } catch (_) {
+                return false;
+              }
+            })
+            .toList();
 
         bool hasDisplayedTasks = taskProvider.displayedTasks.isNotEmpty;
         bool needsTasks = remainingPoints > 0;
@@ -1471,285 +1490,309 @@ class _OverviewScreenState extends State<OverviewScreen> with TickerProviderStat
         priorityIcon = Icons.outlined_flag_rounded;
     }
 
-    return Slidable(
-      key: ValueKey(id),
-      closeOnScroll: true,
-      endActionPane: isAssisting
-          ? null
-          : ActionPane(
+    return FutureBuilder<bool>(
+      future: widget.role == 'manager' ? taskProvider.isTomorrowPlanningComplete() : Future.value(true),
+      builder: (context, snapshot) {
+        bool isPlanningComplete = snapshot.data ?? false;
+        bool canCompleteTask = widget.role != 'manager' || (widget.role == 'manager' && isPlanningComplete && !isAssisting);
+
+        return Padding(
+          padding: const EdgeInsets.symmetric(vertical: 6),
+          child: Slidable(
+            key: ValueKey(id),
+            closeOnScroll: true,
+            endActionPane: ActionPane(
               motion: DrawerMotion(),
               extentRatio: 0.20,
               children: [
-                SlidableAction(
-                  onPressed: (context) {
-                    final today = DateFormat('yyyy-MM-dd').format(DateTime.now());
-                    final task = taskProvider.assignedTasks.firstWhere((t) => t["taskID"] == id, orElse: () => {});
-                    if (task.isNotEmpty && (task["date"] == null || task["date"].toString().isEmpty)) {
-                      task["date"] = today;
-                      print("Date was missing — set task[\"date\"] to today: $today for taskID: ${task["taskID"]}");
-                    }
-                    taskProvider.completeTask(id);
-                  },
-                  backgroundColor: Colors.green,
-                  foregroundColor: Colors.white,
-                  icon: Icons.check,
-                  label: 'Complete',
-                ),
+                if (!isAssisting && canCompleteTask)
+                  SlidableAction(
+                    onPressed: (context) {
+                      final today = DateFormat('yyyy-MM-dd').format(DateTime.now());
+                      final task = taskProvider.assignedTasks.firstWhere((t) => t["taskID"] == id, orElse: () => {});
+                      if (task.isNotEmpty && (task["date"] == null || task["date"].toString().isEmpty)) {
+                        task["date"] = today;
+                        print("Date was missing — set task[\"date\"] to today: $today for taskID: ${task["taskID"]}");
+                      }
+                      taskProvider.completeTask(id);
+                    },
+                    backgroundColor: Colors.green,
+                    foregroundColor: Colors.white,
+                    icon: Icons.check,
+                    label: 'Complete',
+                  ),
+                  if (!isAssisting && !canCompleteTask)
+                  SlidableAction(
+                    onPressed: (context) {
+                      ScaffoldMessenger.of(context).showSnackBar(
+                        const SnackBar(
+                          content: Text("Please complete tomorrow's planning to mark tasks as complete."),
+                          duration: Duration(seconds: 3),
+                        ),
+                      );
+                    },
+                    backgroundColor: Colors.grey[400]!,
+                    foregroundColor: Colors.white,
+                    icon: Icons.lock,
+                    label: 'Locked',
+                  ),
               ],
             ),
-      child: Container(
-        margin: const EdgeInsets.symmetric(vertical: 6),
-        padding: const EdgeInsets.all(15),
-        decoration: BoxDecoration(
-          color: color,
-          borderRadius: BorderRadius.circular(10),
-        ),
-        child: IntrinsicHeight(
-          child: Row(
-            crossAxisAlignment: CrossAxisAlignment.start,
-            mainAxisAlignment: MainAxisAlignment.spaceBetween,
-            children: [
-              // Left Column: Task Details
-              Expanded(
-                child: Column(
+            child: Container(
+              padding: const EdgeInsets.all(15),
+              decoration: BoxDecoration(
+                color: color,
+                borderRadius: BorderRadius.circular(10),
+              ),
+              child: IntrinsicHeight(
+                child: Row(
                   crossAxisAlignment: CrossAxisAlignment.start,
+                  mainAxisAlignment: MainAxisAlignment.spaceBetween,
                   children: [
-                    Text(id, style: TextStyle(color: Colors.grey[700], fontSize: 12)),
-                    Text(title, style: const TextStyle(fontWeight: FontWeight.bold, fontSize: 16),
-                      overflow: TextOverflow.ellipsis,
-                      maxLines: 1,
+                    // Left Column: Task Details
+                    Expanded(
+                      child: Column(
+                        crossAxisAlignment: CrossAxisAlignment.start,
+                        children: [
+                          Text(id, style: TextStyle(color: Colors.grey[700], fontSize: 12)),
+                          Text(title, style: const TextStyle(fontWeight: FontWeight.bold, fontSize: 16),
+                            overflow: TextOverflow.ellipsis,
+                            maxLines: 1,
+                          ),
+                          if (catName.trim().isNotEmpty && catName.trim() != '-')
+                          Text(
+                            catName,
+                            style: const TextStyle(fontStyle: FontStyle.italic, fontSize: 14),
+                            overflow: TextOverflow.ellipsis,
+                            maxLines: 1,
+                          ),
+                          if (isAssisting)
+                            const Text("(Assisting)", style: TextStyle(fontSize: 12, color: Colors.white)),
+                        ],
+                      ),
                     ),
-                    if (catName.trim().isNotEmpty && catName.trim() != '-')
-                    Text(
-                      catName,
-                      style: const TextStyle(fontStyle: FontStyle.italic, fontSize: 14),
-                      overflow: TextOverflow.ellipsis,
-                      maxLines: 1,
+                    // Right Column: Action Elements
+                    Column(
+                      mainAxisAlignment: isPriority ? MainAxisAlignment.start : MainAxisAlignment.center,
+                      crossAxisAlignment: CrossAxisAlignment.end,
+                      children: [
+                        if (isPriority)
+                          Column(
+                            children: [
+                              Icon(
+                                priorityIcon,
+                                color: priorityColor,
+                                size: 22,
+                              ),
+                              const SizedBox(height: 4),
+                            ],
+                          ),
+                        Row(
+                          crossAxisAlignment: CrossAxisAlignment.center,
+                          children: [
+                            if (isGroomingTask && !isAssisting)
+                              Padding(
+                                padding: const EdgeInsets.only(bottom: 5),
+                                child: Container(
+                                  height: 30,
+                                  child: PopupMenuButton<String>(
+                                    icon: Icon(
+                                      Icons.person_add,
+                                      color: Colors.green[800],
+                                      size: 22,
+                                    ),
+                                    onSelected: (value) {},
+                                    itemBuilder: (BuildContext context) {
+                                      return [
+                                        PopupMenuItem<String>(
+                                          enabled: false,
+                                          child: StatefulBuilder(
+                                            builder: (BuildContext context, StateSetter setState) {
+                                              List<String> availableAssistants = staffMembers
+                                                  .where((staff) => staff != widget.userName)
+                                                  .toList();
+                                              List<String> assistant2Options = selectedAssistant1 != null
+                                                  ? availableAssistants
+                                                      .where((staff) => staff != selectedAssistant1)
+                                                      .toList()
+                                                  : availableAssistants;
+
+                                              return Column(
+                                                mainAxisSize: MainAxisSize.min,
+                                                children: [
+                                                  Row(
+                                                    children: [
+                                                      const Text("Assistant 1: ", style: TextStyle(fontSize: 14)),
+                                                      SizedBox(
+                                                        width: 120,
+                                                        child: DropdownButton<String>(
+                                                          value: selectedAssistant1,
+                                                          isExpanded: true,
+                                                          hint: const Text("Select", style: TextStyle(fontSize: 14)),
+                                                          items: availableAssistants.map((String staff) {
+                                                            return DropdownMenuItem<String>(
+                                                              value: staff,
+                                                              child: Text(
+                                                                staff,
+                                                                overflow: TextOverflow.ellipsis,
+                                                                style: const TextStyle(fontSize: 14),
+                                                              ),
+                                                            );
+                                                          }).toList(),
+                                                          onChanged: (String? newValue) {
+                                                            setState(() {
+                                                              selectedAssistant1 = newValue;
+                                                              taskProvider.assignAssistant(id, selectedAssistant1, selectedAssistant2);
+                                                              if (newValue != null) {
+                                                                ScaffoldMessenger.of(context).showSnackBar(
+                                                                  SnackBar(
+                                                                    content: Text("Assigned $newValue as Assistant 1 for '$title'."),
+                                                                    duration: const Duration(seconds: 2),
+                                                                  ),
+                                                                );
+                                                              }
+                                                            });
+                                                            Navigator.pop(context);
+                                                          },
+                                                        ),
+                                                      ),
+                                                      IconButton(
+                                                        icon: const Icon(
+                                                          Icons.delete,
+                                                          color: Colors.red,
+                                                          size: 20,
+                                                        ),
+                                                        onPressed: selectedAssistant1 != null
+                                                            ? () {
+                                                                setState(() {
+                                                                  String? removedAssistant = selectedAssistant1;
+                                                                  if (selectedAssistant2 != null) {
+                                                                    selectedAssistant1 = selectedAssistant2;
+                                                                    selectedAssistant2 = null;
+                                                                    taskProvider.assignAssistant(id, selectedAssistant1, null);
+                                                                    ScaffoldMessenger.of(context).showSnackBar(
+                                                                      SnackBar(
+                                                                        content: Text(
+                                                                            "Removed $removedAssistant as Assistant 1 from '$title'."),
+                                                                        duration: const Duration(seconds: 2),
+                                                                      ),
+                                                                    );
+                                                                  } else {
+                                                                    selectedAssistant1 = null;
+                                                                    taskProvider.assignAssistant(id, null, null);
+                                                                    ScaffoldMessenger.of(context).showSnackBar(
+                                                                      SnackBar(
+                                                                        content: Text(
+                                                                          "Removed $removedAssistant as Assistant 1 from '$title'."),
+                                                                          duration: const Duration(seconds: 2),
+                                                                      ),
+                                                                    );
+                                                                  }
+                                                                });
+                                                                Navigator.pop(context);
+                                                              }
+                                                            : null,
+                                                      ),
+                                                    ],
+                                                  ),
+                                                  Row(
+                                                    children: [
+                                                      const Text("Assistant 2: ", style: TextStyle(fontSize: 14)),
+                                                      SizedBox(
+                                                        width: 120,
+                                                        child: DropdownButton<String>(
+                                                          value: selectedAssistant2,
+                                                          isExpanded: true,
+                                                          hint: const Text("Select", style: TextStyle(fontSize: 14)),
+                                                          items: assistant2Options.map((String staff) {
+                                                            return DropdownMenuItem<String>(
+                                                              value: staff,
+                                                              child: Text(
+                                                                staff,
+                                                                overflow: TextOverflow.ellipsis,
+                                                                style: const TextStyle(fontSize: 14),
+                                                              ),
+                                                            );
+                                                          }).toList(),
+                                                          onChanged: (String? newValue) {
+                                                            setState(() {
+                                                              selectedAssistant2 = newValue;
+                                                              taskProvider.assignAssistant(id, selectedAssistant1, selectedAssistant2);
+                                                              if (newValue != null) {
+                                                                ScaffoldMessenger.of(context).showSnackBar(
+                                                                  SnackBar(
+                                                                    content: Text("Assigned $newValue as Assistant 2 for '$title'."),
+                                                                    duration: const Duration(seconds: 2),
+                                                                  ),
+                                                                );
+                                                              }
+                                                            });
+                                                            Navigator.pop(context);
+                                                          },
+                                                        ),
+                                                      ),
+                                                      IconButton(
+                                                        icon: const Icon(
+                                                          Icons.delete,
+                                                          color: Colors.red,
+                                                          size: 20,
+                                                        ),
+                                                        onPressed: selectedAssistant2 != null
+                                                            ? () {
+                                                                setState(() {
+                                                                  String? removedAssistant = selectedAssistant2;
+                                                                  selectedAssistant2 = null;
+                                                                  taskProvider.assignAssistant(id, selectedAssistant1, null);
+                                                                  ScaffoldMessenger.of(context).showSnackBar(
+                                                                    SnackBar(
+                                                                      content:
+                                                                          Text("Removed $removedAssistant as Assistant 2 from '$title'."),
+                                                                      duration: const Duration(seconds: 2),
+                                                                    ),
+                                                                  );
+                                                                });
+                                                                Navigator.pop(context);
+                                                              }
+                                                            : null,
+                                                      ),
+                                                    ],
+                                                  ),
+                                                ],
+                                              );
+                                            },
+                                          ),
+                                        ),
+                                      ];
+                                    },
+                                  ),
+                                ),
+                              ),
+                            const SizedBox(width: 20),
+                            Container(
+                              padding: const EdgeInsets.symmetric(horizontal: 10, vertical: 5),
+                              decoration: BoxDecoration(
+                                color: Colors.green[100],
+                                borderRadius: BorderRadius.circular(7),
+                              ),
+                              child: Text(
+                                '${formatDouble(points)} pts',
+                                style: TextStyle(
+                                  color: Colors.green[900],
+                                  fontWeight: FontWeight.w600,
+                                ),
+                              ),
+                            ),
+                          ],
+                        ),
+                      ],
                     ),
-                    if (isAssisting)
-                      const Text("(Assisting)", style: TextStyle(fontSize: 12, color: Colors.white))
                   ],
                 ),
               ),
-              // Right Column: Action Elements
-              Column(
-                mainAxisAlignment: isPriority ? MainAxisAlignment.start : MainAxisAlignment.center,
-                crossAxisAlignment: CrossAxisAlignment.end,
-                children: [
-                  if (isPriority)
-                    Column(
-                      children: [
-                        Icon(
-                          priorityIcon,
-                          color: priorityColor,
-                          size: 22,
-                        ),
-                        const SizedBox(height: 4),
-                      ],
-                    ),
-                  Row(
-                    crossAxisAlignment: CrossAxisAlignment.center,
-                    children: [
-                      if (isGroomingTask && !isAssisting)
-                        Padding(
-                          padding: const EdgeInsets.only(bottom: 5),
-                          child: Container(
-                            height: 30,
-                            child: PopupMenuButton<String>(
-                              icon: Icon(
-                                Icons.person_add,
-                                color: Colors.green[800],
-                                size: 22,
-                              ),
-                              onSelected: (value) {},
-                              itemBuilder: (BuildContext context) {
-                                return [
-                                  PopupMenuItem<String>(
-                                    enabled: false,
-                                    child: StatefulBuilder(
-                                      builder: (BuildContext context, StateSetter setState) {
-                                        List<String> availableAssistants = staffMembers
-                                            .where((staff) => staff != widget.userName)
-                                            .toList();
-                                        List<String> assistant2Options = selectedAssistant1 != null
-                                            ? availableAssistants
-                                                .where((staff) => staff != selectedAssistant1)
-                                                .toList()
-                                            : availableAssistants;
-
-                                        return Column(
-                                          mainAxisSize: MainAxisSize.min,
-                                          children: [
-                                            Row(
-                                              children: [
-                                                const Text("Assistant 1: ", style: TextStyle(fontSize: 14)),
-                                                SizedBox(
-                                                  width: 120,
-                                                  child: DropdownButton<String>(
-                                                    value: selectedAssistant1,
-                                                    isExpanded: true,
-                                                    hint: const Text("Select", style: TextStyle(fontSize: 14)),
-                                                    items: availableAssistants.map((String staff) {
-                                                      return DropdownMenuItem<String>(
-                                                        value: staff,
-                                                        child: Text(
-                                                          staff,
-                                                          overflow: TextOverflow.ellipsis,
-                                                          style: const TextStyle(fontSize: 14),
-                                                        ),
-                                                      );
-                                                    }).toList(),
-                                                    onChanged: (String? newValue) {
-                                                      setState(() {
-                                                        selectedAssistant1 = newValue;
-                                                        taskProvider.assignAssistant(id, selectedAssistant1, selectedAssistant2);
-                                                        if (newValue != null) {
-                                                          ScaffoldMessenger.of(context).showSnackBar(
-                                                            SnackBar(
-                                                              content: Text("Assigned $newValue as Assistant 1 for '$title'."),
-                                                              duration: const Duration(seconds: 2),
-                                                            ),
-                                                          );
-                                                        }
-                                                      });
-                                                      Navigator.pop(context);
-                                                    },
-                                                  ),
-                                                ),
-                                                IconButton(
-                                                  icon: const Icon(
-                                                    Icons.delete,
-                                                    color: Colors.red,
-                                                    size: 20,
-                                                  ),
-                                                  onPressed: selectedAssistant1 != null
-                                                      ? () {
-                                                          setState(() {
-                                                            String? removedAssistant = selectedAssistant1;
-                                                            if (selectedAssistant2 != null) {
-                                                              selectedAssistant1 = selectedAssistant2;
-                                                              selectedAssistant2 = null;
-                                                              taskProvider.assignAssistant(id, selectedAssistant1, null);
-                                                              ScaffoldMessenger.of(context).showSnackBar(
-                                                                SnackBar(
-                                                                  content: Text(
-                                                                      "Removed $removedAssistant as Assistant 1 from '$title'."),
-                                                                  duration: const Duration(seconds: 2),
-                                                                ),
-                                                              );
-                                                            } else {
-                                                              selectedAssistant1 = null;
-                                                              taskProvider.assignAssistant(id, null, null);
-                                                              ScaffoldMessenger.of(context).showSnackBar(
-                                                                SnackBar(
-                                                                  content: Text(
-                                                                      "Removed $removedAssistant as Assistant 1 from '$title'."),
-                                                                  duration: const Duration(seconds: 2),
-                                                                ),
-                                                              );
-                                                            }
-                                                          });
-                                                          Navigator.pop(context);
-                                                        }
-                                                      : null,
-                                                ),
-                                              ],
-                                            ),
-                                            Row(
-                                              children: [
-                                                const Text("Assistant 2: ", style: TextStyle(fontSize: 14)),
-                                                SizedBox(
-                                                  width: 120,
-                                                  child: DropdownButton<String>(
-                                                    value: selectedAssistant2,
-                                                    isExpanded: true,
-                                                    hint: const Text("Select", style: TextStyle(fontSize: 14)),
-                                                    items: assistant2Options.map((String staff) {
-                                                      return DropdownMenuItem<String>(
-                                                        value: staff,
-                                                        child: Text(
-                                                          staff,
-                                                          overflow: TextOverflow.ellipsis,
-                                                          style: const TextStyle(fontSize: 14),
-                                                        ),
-                                                      );
-                                                    }).toList(),
-                                                    onChanged: (String? newValue) {
-                                                      setState(() {
-                                                        selectedAssistant2 = newValue;
-                                                        taskProvider.assignAssistant(id, selectedAssistant1, selectedAssistant2);
-                                                        if (newValue != null) {
-                                                          ScaffoldMessenger.of(context).showSnackBar(
-                                                            SnackBar(
-                                                              content: Text("Assigned $newValue as Assistant 2 for '$title'."),
-                                                              duration: const Duration(seconds: 2),
-                                                            ),
-                                                          );
-                                                        }
-                                                      });
-                                                      Navigator.pop(context);
-                                                    },
-                                                  ),
-                                                ),
-                                                IconButton(
-                                                  icon: const Icon(
-                                                    Icons.delete,
-                                                    color: Colors.red,
-                                                    size: 20,
-                                                  ),
-                                                  onPressed: selectedAssistant2 != null
-                                                      ? () {
-                                                          setState(() {
-                                                            String? removedAssistant = selectedAssistant2;
-                                                            selectedAssistant2 = null;
-                                                            taskProvider.assignAssistant(id, selectedAssistant1, null);
-                                                            ScaffoldMessenger.of(context).showSnackBar(
-                                                              SnackBar(
-                                                                content:
-                                                                    Text("Removed $removedAssistant as Assistant 2 from '$title'."),
-                                                                duration: const Duration(seconds: 2),
-                                                              ),
-                                                            );
-                                                          });
-                                                          Navigator.pop(context);
-                                                        }
-                                                      : null,
-                                                ),
-                                              ],
-                                            ),
-                                          ],
-                                        );
-                                      },
-                                    ),
-                                  ),
-                                ];
-                              },
-                            ),
-                          ),
-                        ),
-                      const SizedBox(width: 20),
-                      Container(
-                        padding: const EdgeInsets.symmetric(horizontal: 10, vertical: 5),
-                        decoration: BoxDecoration(
-                          color: Colors.green[100],
-                          borderRadius: BorderRadius.circular(7),
-                        ),
-                        child: Text(
-                          '${formatDouble(points)} pts',
-                          style: TextStyle(
-                            color: Colors.green[900],
-                            fontWeight: FontWeight.w600,
-                          ),
-                        ),
-                      ),
-                    ],
-                  ),
-                ],
-              ),
-            ],
-          ),
-        ),
-      ),
+            ),
+          )
+        );
+      }
     );
   }
 

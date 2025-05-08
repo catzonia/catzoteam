@@ -1100,6 +1100,44 @@ class TaskProvider extends ChangeNotifier {
     }
   }
 
+  Future<bool> isTomorrowPlanningComplete() async {
+    final tomorrow = DateTime.now().add(Duration(days: 1));
+    final dateStr = DateFormat('yyyy-MM-dd').format(tomorrow);
+
+    try {
+      // Calculate total target points (30 points per staff)
+      double totalTargetPoints = _staffNrics.length * 30.0;
+
+      // Handle edge case: no staff in branch
+      if (_staffNrics.isEmpty) {
+        print('No staff found for branch $_branchId, planning incomplete');
+        return false;
+      }
+
+      // Fetch assigned tasks for tomorrow
+      final snapshot = await FirebaseFirestore.instance
+          .collection('tasks')
+          .where('date', isEqualTo: dateStr)
+          .where('branchId', isEqualTo: _branchId)
+          .where('status', isEqualTo: 'assigned')
+          .get();
+
+      // Calculate total planned points
+      double totalPlannedPoints = snapshot.docs.fold(0.0, (sum, doc) {
+        var data = doc.data();
+        return sum + parsePoints(data['points']);
+      });
+
+      // Planning is complete if total planned points meet or exceed total target points
+      bool isComplete = totalPlannedPoints >= totalTargetPoints;
+      print('Tomorrow Planning Check: Planned=$totalPlannedPoints, Target=$totalTargetPoints, Complete=$isComplete');
+      return isComplete;
+    } catch (e) {
+      print('Error checking tomorrow\'s planning: $e');
+      return false;
+    }
+  }
+
   Future<void> togglePriority(String taskID) async {
     try {
       final task = _availableTasks.firstWhere((t) => t["taskID"] == taskID, orElse: () => {});
