@@ -1,12 +1,14 @@
 import 'package:flutter/material.dart';
 import 'package:flutter_slidable/flutter_slidable.dart';
+import 'package:shared_preferences/shared_preferences.dart';
 import 'package:provider/provider.dart';
-import 'package:lottie/lottie.dart';
+import 'package:confetti/confetti.dart';
 import 'package:cloud_firestore/cloud_firestore.dart';
 import 'package:catzoteam/provider.dart';
 import 'package:catzoteam/models/double.dart';
 import 'package:catzoteam/models/painter.dart';
-import 'package:catzoteam/models/task_category.dart'; 
+import 'package:catzoteam/models/task_category.dart';
+import 'package:catzoteam/widgets/custom_dialog.dart';
 import 'package:intl/intl.dart';
 import 'dart:math';
 
@@ -18,28 +20,46 @@ class OverviewScreen extends StatefulWidget {
   final String role;
   final String userName;
 
-  const OverviewScreen({
-    this.role = "staff", 
-    this.userName = "Lathifah Husna", 
-    super.key
-  });
+  const OverviewScreen(
+      {this.role = "staff", this.userName = "Lathifah Husna", super.key});
 
   @override
   _OverviewScreenState createState() => _OverviewScreenState();
 }
 
-class _OverviewScreenState extends State<OverviewScreen> with TickerProviderStateMixin {
+class _OverviewScreenState extends State<OverviewScreen>
+    with TickerProviderStateMixin {
   List<String> staffMembers = [];
   bool _isLoadingStaff = true;
   String _errorMessage = '';
-  List<int> _congratulatedMilestones = []; 
-  
+  List<int> _congratulatedMilestones = [];
+
   final Map<double, Map<String, dynamic>> badgeData = {
-    45.0: {"icon": Icons.star_border, "color": Colors_bronze, "label": "Bronze Starter"},
-    55.0: {"icon": Icons.military_tech, "color": Colors.grey, "label": "Silver Achiever"},
-    65.0: {"icon": Icons.workspace_premium, "color": Colors.amber, "label": "Golden Performer"},
-    75.0: {"icon": Icons.diamond, "color": Colors.blue, "label": "Diamond Elite"},
-    85.0: {"icon": Icons.emoji_events, "color": Colors.deepPurple, "label": "Champion Badge"},
+    45.0: {
+      "icon": Icons.star_border,
+      "color": Colors_bronze,
+      "label": "Bronze Starter"
+    },
+    55.0: {
+      "icon": Icons.military_tech,
+      "color": Colors.grey,
+      "label": "Silver Achiever"
+    },
+    65.0: {
+      "icon": Icons.workspace_premium,
+      "color": Colors.amber,
+      "label": "Golden Performer"
+    },
+    75.0: {
+      "icon": Icons.diamond,
+      "color": Colors.blue,
+      "label": "Diamond Elite"
+    },
+    85.0: {
+      "icon": Icons.emoji_events,
+      "color": Colors.deepPurple,
+      "label": "Champion Badge"
+    },
   };
 
   final List<Map<String, dynamic>> categories = kTaskCategories.map((cat) {
@@ -71,7 +91,11 @@ class _OverviewScreenState extends State<OverviewScreen> with TickerProviderStat
   void initState() {
     super.initState();
     _fetchStaffMembers();
-    
+
+ WidgetsBinding.instance.addPostFrameCallback((_) {
+    _showDailyWelcomePopup(context, widget.userName);
+  });
+
     _warningAnimController = AnimationController(
       duration: const Duration(milliseconds: 800),
       vsync: this,
@@ -88,13 +112,37 @@ class _OverviewScreenState extends State<OverviewScreen> with TickerProviderStat
     ]).animate(_warningAnimController);
   }
 
+  Future<void> _showDailyWelcomePopup(BuildContext context, String userName) async {
+    final prefs = await SharedPreferences.getInstance();
+    final today = DateTime.now().toIso8601String().substring(0, 10); // yyyy-MM-dd
+    final key = 'welcome_shown_${userName}_$today';
+
+    if (prefs.getBool(key) ?? false) return;
+
+    await prefs.setBool(key, true);
+
+    showDialog(
+      context: context,
+      builder: (_) => CustomDialog(
+        title: "👋 Welcome ${userName.split(' ').first}",
+        message: "Let’s crush today! 💪\n🎯 Target:\n➤ Get 20 points by 12:30 PM\n➤ Get 40 points by 4:00 PM\n\nYou’ve got this — every task counts! 🚀 Keep up the great work!",
+        actions: [
+          TextButton(
+            onPressed: () => Navigator.of(context).pop(),
+            child: const Text("OK"),
+          ),
+        ],
+      ),
+    );
+  }
+
   Future<void> _fetchStaffMembers() async {
     try {
       final taskProvider = Provider.of<TaskProvider>(context, listen: false);
       QuerySnapshot snapshot = await FirebaseFirestore.instance
-        .collection('staff')
-        .where('branch', isEqualTo: taskProvider.branchId)
-        .get();
+          .collection('staff')
+          .where('branch', isEqualTo: taskProvider.branchId)
+          .get();
       List<String> names = snapshot.docs.map((doc) {
         var data = doc.data() as Map<String, dynamic>;
         String username = data['username'] as String;
@@ -116,6 +164,20 @@ class _OverviewScreenState extends State<OverviewScreen> with TickerProviderStat
     }
   }
 
+  Future<bool> hasShownMilestone(String userName, int milestone) async {
+    final prefs = await SharedPreferences.getInstance();
+    final today = DateFormat('yyyyMMdd').format(DateTime.now());
+    final key = 'shown_${milestone}_${userName}_$today';
+    return prefs.getBool(key) ?? false;
+  }
+
+  Future<void> markMilestoneAsShown(String userName, int milestone) async {
+    final prefs = await SharedPreferences.getInstance();
+    final today = DateFormat('yyyyMMdd').format(DateTime.now());
+    final key = 'shown_${milestone}_${userName}_$today';
+    await prefs.setBool(key, true);
+  }
+
   double estimateTaskHeight(Map<String, dynamic> task) {
     double baseHeight = 100; // ID + title
     if ((task['catName'] ?? '').toString().trim().isNotEmpty) {
@@ -126,20 +188,22 @@ class _OverviewScreenState extends State<OverviewScreen> with TickerProviderStat
     }
     return baseHeight;
   }
-  
+
   void _checkAndAddEarnedBadges(double dailyPoints) {
     const List<double> milestones = [45.0, 55.0, 65.0, 75.0, 85.0];
-    
+
     for (double milestone in milestones) {
       int milestoneInt = milestone.toInt();
-      if (dailyPoints >= milestone && !_congratulatedMilestones.contains(milestoneInt)) {
+      if (dailyPoints >= milestone &&
+          !_congratulatedMilestones.contains(milestoneInt)) {
         setState(() {
           _congratulatedMilestones.add(milestoneInt);
         });
 
         // Only increment badge if NOT already earned today
         final taskProvider = Provider.of<TaskProvider>(context, listen: false);
-        Map<String, double> badges = taskProvider.getStaffBadges(widget.userName);
+        Map<String, double> badges =
+            taskProvider.getStaffBadges(widget.userName);
         String badgeField = 'badge${milestone.toStringAsFixed(0)}';
 
         if ((badges[badgeField] ?? 0.0) == 0.0) {
@@ -154,22 +218,17 @@ class _OverviewScreenState extends State<OverviewScreen> with TickerProviderStat
   void _showBadgeDetailDialog(double milestone, String label) {
     showDialog(
       context: context,
-      builder: (context) {
-        return AlertDialog(
-          shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(15)),
-          title: Text("🎖 $label"),
-          content: Text(
+      builder: (context) => CustomDialog(
+        title: "🎖 $label",
+        message:
             "You have earned the '$label' badge by achieving ${milestone.toStringAsFixed(0)} daily points!\n\nKeep collecting more badges for rewards!",
-            style: const TextStyle(fontSize: 16, color: Colors.black87),
+        actions: [
+          TextButton(
+            onPressed: () => Navigator.pop(context),
+            child: const Text("Close"),
           ),
-          actions: [
-            TextButton(
-              onPressed: () => Navigator.pop(context),
-              child: const Text("Close"),
-            )
-          ],
-        );
-      },
+        ],
+      ),
     );
   }
 
@@ -177,7 +236,9 @@ class _OverviewScreenState extends State<OverviewScreen> with TickerProviderStat
     final now = TimeOfDay.now();
     final timeValue = Duration(hours: now.hour, minutes: now.minute);
 
-    if (timeValue >= const Duration(hours: 12, minutes: 30) && dailyPoints < 20.0 && !_triggeredWarnings.contains(20)) {
+    if (timeValue >= const Duration(hours: 12, minutes: 30) &&
+        dailyPoints < 20.0 &&
+        !_triggeredWarnings.contains(20)) {
       setState(() {
         _triggeredWarnings.add(20);
       });
@@ -185,7 +246,9 @@ class _OverviewScreenState extends State<OverviewScreen> with TickerProviderStat
       print("⚠️ Warning: <20 points after 12:30pm");
     }
 
-    if (timeValue >= const Duration(hours: 16, minutes: 0) && dailyPoints < 40.0 && !_triggeredWarnings.contains(40)) {
+    if (timeValue >= const Duration(hours: 16, minutes: 0) &&
+        dailyPoints < 40.0 &&
+        !_triggeredWarnings.contains(40)) {
       setState(() {
         _triggeredWarnings.add(40);
       });
@@ -259,6 +322,52 @@ class _OverviewScreenState extends State<OverviewScreen> with TickerProviderStat
         double targetPoints = taskProvider.getTargetPoints(widget.userName);
 
         WidgetsBinding.instance.addPostFrameCallback((_) {
+          hasShownMilestone(widget.userName, 2600).then((alreadyShown) {
+            if (dailyPoints >= 26.0 && !alreadyShown) {
+              markMilestoneAsShown(widget.userName, 2600);
+              _congratulatedMilestones.add(2600);
+              showDialog(
+                context: context,
+                builder: (context) => CustomDialog(
+                  title: "⏳ So Close",
+                  message: "You’re just a few points away from your daily goal.\nKeep going — you’ve got this! 💥",
+                  actions: [
+                    TextButton(
+                      onPressed: () => Navigator.pop(context),
+                      child: const Text("OK"),
+                    ),
+                  ],
+                ),
+              );
+            }
+          });
+          
+          hasShownMilestone(widget.userName, 5300).then((alreadyShown) {
+            if (dailyPoints >= 53.0 && !alreadyShown) {
+              markMilestoneAsShown(widget.userName, 5300);
+              _congratulatedMilestones.add(5300);
+              final confettiControllerTop = ConfettiController(duration: Duration(seconds: 2));
+              confettiControllerTop.play();
+              showDialog(
+                context: context,
+                builder: (context) => CustomDialog(
+                  title: "🎉 You Did It!",
+                  message: "You’ve hit your daily target of X points — awesome work! 💪\nIf you still have time, try pushing a bit more. Let’s break limits together! 🚀",
+                  actions: [
+                    TextButton(
+                      onPressed: () {
+                        confettiControllerTop.stop();
+                        Navigator.pop(context);
+                      },
+                      child: const Text("OK"),
+                    ),
+                  ],
+                  confettiController: confettiControllerTop,
+                ),
+              );
+            }
+          });
+
           _checkAndAddEarnedBadges(dailyPoints);
           _checkWarningMilestones(dailyPoints);
         });
@@ -294,9 +403,11 @@ class _OverviewScreenState extends State<OverviewScreen> with TickerProviderStat
                         children: [
                           CircleAvatar(
                             radius: 55,
-                            backgroundImage: const AssetImage('assets/profile.jpg'),
+                            backgroundImage:
+                                const AssetImage('assets/profile.jpg'),
                             backgroundColor: Colors.grey[200],
-                            child: Icon(Icons.pets, size: 40, color: Colors.deepOrange[300]),
+                            child: Icon(Icons.pets,
+                                size: 40, color: Colors.deepOrange[300]),
                           ),
                           const SizedBox(width: 20),
                           Expanded(
@@ -347,7 +458,8 @@ class _OverviewScreenState extends State<OverviewScreen> with TickerProviderStat
                         LayoutBuilder(
                           builder: (context, constraints) {
                             double availableWidth = constraints.maxWidth;
-                            const double maxPoints = 85; // Same as in _buildDailyProgressBar
+                            const double maxPoints =
+                                85; // Same as in _buildDailyProgressBar
                             return SizedBox(
                               height: 36, // Height of the warning icons
                               width: double.infinity,
@@ -355,27 +467,37 @@ class _OverviewScreenState extends State<OverviewScreen> with TickerProviderStat
                                 children: _triggeredWarnings.map((milestone) {
                                   // Calculate the position of the milestone relative to the progress bar width
                                   double fraction = milestone / maxPoints;
-                                  double leftPosition = fraction * availableWidth - 18; // Center the icon (36/2 = 18)
+                                  double leftPosition =
+                                      fraction * availableWidth -
+                                          18; // Center the icon (36/2 = 18)
 
                                   return Positioned(
-                                    left: leftPosition.clamp(0, availableWidth - 36), // Ensure it stays within bounds
+                                    left: leftPosition.clamp(
+                                        0,
+                                        availableWidth -
+                                            36), // Ensure it stays within bounds
                                     child: GestureDetector(
                                       onTap: () => _showWarningPopup(milestone),
                                       child: AnimatedBuilder(
                                         animation: _warningAnimController,
                                         builder: (context, child) {
-                                          final jitter = _random.nextDouble() * 0.05;
+                                          final jitter =
+                                              _random.nextDouble() * 0.05;
                                           return Transform.scale(
-                                            scale: _warningScaleAnimation.value + jitter,
+                                            scale:
+                                                _warningScaleAnimation.value +
+                                                    jitter,
                                             child: Opacity(
-                                              opacity: _warningOpacityAnimation.value,
+                                              opacity: _warningOpacityAnimation
+                                                  .value,
                                               child: Stack(
                                                 children: [
                                                   Container(
                                                     width: 36,
                                                     height: 36,
                                                     decoration: BoxDecoration(
-                                                      color: Colors.red.withOpacity(0.3),
+                                                      color: Colors.red
+                                                          .withOpacity(0.3),
                                                       shape: BoxShape.circle,
                                                     ),
                                                   ),
@@ -383,21 +505,32 @@ class _OverviewScreenState extends State<OverviewScreen> with TickerProviderStat
                                                     width: 36,
                                                     height: 36,
                                                     decoration: BoxDecoration(
-                                                      gradient: const RadialGradient(
-                                                        colors: [Color(0xFFFF5252), Color(0xFFD32F2F)],
-                                                        center: Alignment.center,
+                                                      gradient:
+                                                          const RadialGradient(
+                                                        colors: [
+                                                          Color(0xFFFF5252),
+                                                          Color(0xFFD32F2F)
+                                                        ],
+                                                        center:
+                                                            Alignment.center,
                                                         radius: 0.8,
                                                       ),
                                                       shape: BoxShape.circle,
                                                       boxShadow: [
                                                         BoxShadow(
-                                                          color: Colors.red.withOpacity(0.4),
+                                                          color: Colors.red
+                                                              .withOpacity(0.4),
                                                           blurRadius: 8,
-                                                          offset: const Offset(0, 4),
+                                                          offset: const Offset(
+                                                              0, 4),
                                                         ),
                                                       ],
                                                     ),
-                                                    child: const Icon(Icons.warning_amber_rounded, color: Colors.white, size: 20),
+                                                    child: const Icon(
+                                                        Icons
+                                                            .warning_amber_rounded,
+                                                        color: Colors.white,
+                                                        size: 20),
                                                   ),
                                                 ],
                                               ),
@@ -417,7 +550,10 @@ class _OverviewScreenState extends State<OverviewScreen> with TickerProviderStat
                       const SizedBox(height: 16),
                       const Text(
                         'Earned Badges:',
-                        style: TextStyle(fontSize: 14, fontWeight: FontWeight.w600, color: Colors.black54),
+                        style: TextStyle(
+                            fontSize: 14,
+                            fontWeight: FontWeight.w600,
+                            color: Colors.black54),
                       ),
                       const SizedBox(height: 8),
                       _buildBadgeRow(),
@@ -484,7 +620,9 @@ class _OverviewScreenState extends State<OverviewScreen> with TickerProviderStat
                                     dailyDeficit.toStringAsFixed(1),
                                     style: TextStyle(
                                       fontSize: 14,
-                                      color: dailyDeficit > 0 ? Colors.red : Colors.black87,
+                                      color: dailyDeficit > 0
+                                          ? Colors.red
+                                          : Colors.black87,
                                     ),
                                   ),
                                 ],
@@ -495,28 +633,6 @@ class _OverviewScreenState extends State<OverviewScreen> with TickerProviderStat
                       ),
                     ],
                   ),
-                  // Positioned(
-                  //   bottom: 0,
-                  //   right: 0,
-                  //   child: ElevatedButton(
-                  //     onPressed: () {
-                  //       _showTrencheSelectionDialog(context, taskProvider);
-                  //     },
-                  //     style: ElevatedButton.styleFrom(
-                  //       backgroundColor: Colors.orange,
-                  //       shape: RoundedRectangleBorder(
-                  //         borderRadius: BorderRadius.circular(10),
-                  //       ),
-                  //     ),
-                  //     child: const Text(
-                  //       'Select Trenche',
-                  //       style: TextStyle(
-                  //         color: Colors.white,
-                  //         fontSize: 14,
-                  //       ),
-                  //     ),
-                  //   ),
-                  // ),
                 ],
               );
             },
@@ -534,34 +650,26 @@ class _OverviewScreenState extends State<OverviewScreen> with TickerProviderStat
     // Calculate progress based on dailyPoints
     double progress = (dailyPoints / maxPoints).clamp(0.0, 1.0);
 
-    // Trigger milestone dialog for daily points
-    for (double milestone in milestones) {
-      if (dailyPoints >= milestone && dailyPoints < milestone + 0.1) {
-        WidgetsBinding.instance.addPostFrameCallback((_) {
-          _showMilestoneDialog(context, milestone);
-        });
-      }
-    }
-
     return Column(
       crossAxisAlignment: CrossAxisAlignment.start,
       children: [
         TweenAnimationBuilder<double>(
-          tween: Tween(begin: 0.0, end: progress),
-          duration: const Duration(milliseconds: 800),
-          builder: (context, value, child) {
-            return SizedBox(
-              height: 18,
-              width: double.infinity,
-              child: CustomPaint(
-              painter: RoundedLinearProgressPainter(
-                value,
-                (taskProvider.getStaffInProgressPoints(widget.userName) / 85.0).clamp(0.0, 1.0),
+            tween: Tween(begin: 0.0, end: progress),
+            duration: const Duration(milliseconds: 800),
+            builder: (context, value, child) {
+              return SizedBox(
+                height: 18,
+                width: double.infinity,
+                child: CustomPaint(
+                  painter: RoundedLinearProgressPainter(
+                    value,
+                    (taskProvider.getStaffInProgressPoints(widget.userName) /
+                            85.0)
+                        .clamp(0.0, 1.0),
+                  ),
                 ),
-              ),
-            );
-          }
-        ),
+              );
+            }),
         const SizedBox(height: 8),
         LayoutBuilder(
           builder: (context, constraints) {
@@ -572,7 +680,7 @@ class _OverviewScreenState extends State<OverviewScreen> with TickerProviderStat
               child: Stack(
                 children: [
                   // Milestone labels
-                  ... milestones.asMap().entries.map((entry) {
+                  ...milestones.asMap().entries.map((entry) {
                     double milestone = entry.value;
                     double fraction = milestone / maxPoints;
                     bool isReached = dailyPoints >= milestone;
@@ -592,7 +700,9 @@ class _OverviewScreenState extends State<OverviewScreen> with TickerProviderStat
                           child: Text(
                             milestone.toStringAsFixed(0),
                             style: TextStyle(
-                              color: isReached ? Colors.deepOrange : Colors.black38,
+                              color: isReached
+                                  ? Colors.deepOrange
+                                  : Colors.black38,
                               fontSize: 14,
                               fontWeight: FontWeight.bold,
                             ),
@@ -610,82 +720,52 @@ class _OverviewScreenState extends State<OverviewScreen> with TickerProviderStat
     );
   }
 
-  void _showMilestoneDialog(BuildContext context, double milestone) {
-    int milestoneInt = milestone.toInt();
-    if (_congratulatedMilestones.contains(milestoneInt)) return;
-
-    _congratulatedMilestones.add(milestoneInt);
-
-    showDialog(
-      context: context,
-      builder: (context) {
-        return AlertDialog(
-          shape: RoundedRectangleBorder(
-            borderRadius: BorderRadius.circular(20),
-          ),
-          backgroundColor: Colors.white,
-          content: Column(
-            mainAxisSize: MainAxisSize.min,
-            children: [
-              Lottie.asset('assets/congratulations.json', repeat: false, height: 120),
-              const SizedBox(height: 16),
-              Text("You've reached the ${milestone.toStringAsFixed(0)} points milestone today! Keep it up!",
-                style: const TextStyle(fontSize: 16, color: Colors.black54),
-              ),
-            ],
-          ),
-          actions: [
-            ElevatedButton(
-              onPressed: () {
-                Navigator.pop(context);
-              },
-              style: ElevatedButton.styleFrom(
-                backgroundColor: Colors.orange,
-                shape: RoundedRectangleBorder(
-                  borderRadius: BorderRadius.circular(10),
-                ),
-              ),
-              child: const Text(
-                "Awesome!",
-                style: TextStyle(
-                  color: Colors.white,
-                  fontSize: 16,
-                ),
-              ),
-            ),
-          ],
-        );
-      },
-    );
-  }
-
   void _showWarningPopup(int milestone) {
+    final Map<int, Map<String, String>> warningData = {
+      20: {
+        'title': 'Heads Up: 20 Points Not Reached',
+        'message': 'It’s 12:30 PM, and you’re still below 20 points.\nLet’s move faster to stay on track!',
+      },
+      40: {
+        'title': 'Warning: 40 Points Not Reached',
+        'message': 'It’s already 4:00 PM and your progress is still under 40 points.\nFinish your tasks soon to avoid delays.',
+      },
+    };
+
+    if (!warningData.containsKey(milestone)) return;
+
+    final title = warningData[milestone]!['title']!;
+    final message = warningData[milestone]!['message']!;
+    
     showDialog(
       context: context,
-      builder: (_) => AlertDialog(
-        shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(20)),
-        backgroundColor: Colors.white,
-        title: Row(
-          children: [
-            Container(
-              padding: const EdgeInsets.all(8),
-              decoration: BoxDecoration(
-                color: Colors.red.shade100,
-                borderRadius: BorderRadius.circular(8),
-              ),
-              child: Icon(Icons.warning_amber_rounded, color: Colors.red.shade700, size: 28),
-            ),
-            const SizedBox(width: 12),
-            const Text("Deadline Missed", style: TextStyle(fontWeight: FontWeight.bold)),
-          ],
-        ),
-        content: Text("You didn't reach $milestone points before the deadline. This warning will stay until you reach $milestone points."),
+      builder: (_) => CustomDialog(
+        title: title,
+        message: message,
         actions: [
           TextButton(
             onPressed: () => Navigator.of(context).pop(),
-            child: const Text("Understood"),
+            child: const Text(
+              'I’ll complete my tasks',
+              style: TextStyle(color: Colors.green),
+            ),
+          ),
+          TextButton(
+            onPressed: () => Navigator.of(context).pop(),
+            child: const Text(
+              'I’ll add more points',
+              style: TextStyle(color: Colors.blue),
+            ),
           ),
         ],
+          leadingIcon: Container(
+          padding: const EdgeInsets.all(8),
+          decoration: BoxDecoration(
+            color: Colors.red.shade100,
+            borderRadius: BorderRadius.circular(8),
+          ),
+          child: Icon(Icons.warning_amber_rounded, color: Colors.red.shade700, size: 28),
+        ),
       ),
     );
   }
@@ -693,12 +773,12 @@ class _OverviewScreenState extends State<OverviewScreen> with TickerProviderStat
   Widget _buildBadgeRow() {
     return Consumer<TaskProvider>(
       builder: (context, taskProvider, child) {
-        Map<String, double> badges = taskProvider.getStaffBadges(widget.userName);
+        Map<String, double> badges =
+            taskProvider.getStaffBadges(widget.userName);
 
         // Filter badges that have count > 0
-        List<MapEntry<String, double>> earnedBadges = badges.entries
-            .where((entry) => entry.value > 0)
-            .toList();
+        List<MapEntry<String, double>> earnedBadges =
+            badges.entries.where((entry) => entry.value > 0).toList();
 
         if (earnedBadges.isEmpty) {
           return const Text(
@@ -750,7 +830,10 @@ class _OverviewScreenState extends State<OverviewScreen> with TickerProviderStat
                   ),
                   Text(
                     '${badge["label"]}',
-                    style: TextStyle(fontSize: 10, fontWeight: FontWeight.w600, color: badge["color"]),
+                    style: TextStyle(
+                        fontSize: 10,
+                        fontWeight: FontWeight.w600,
+                        color: badge["color"]),
                     overflow: TextOverflow.ellipsis,
                   ),
                 ],
@@ -766,7 +849,8 @@ class _OverviewScreenState extends State<OverviewScreen> with TickerProviderStat
     return Consumer<TaskProvider>(
       builder: (context, taskProvider, child) {
         double targetPoints = taskProvider.getTargetPoints(widget.userName);
-        double currentPoints = taskProvider.getStaffDailyPoints(widget.userName);
+        double currentPoints =
+            taskProvider.getStaffDailyPoints(widget.userName);
         double remainingPoints = targetPoints - currentPoints;
 
         // Get today's date
@@ -774,17 +858,15 @@ class _OverviewScreenState extends State<OverviewScreen> with TickerProviderStat
         String todayDateStr = DateFormat('yyyy-MM-dd').format(today);
 
         // Filter suggested tasks to only include those for today and displayed
-        List<Map<String, dynamic>> suggestedTasks = taskProvider
-            .suggestTasks(widget.userName)
-            .where((task) {
-              try {
-                String taskDate = task['date'] ?? '';
-                return taskDate == todayDateStr;
-              } catch (_) {
-                return false;
-              }
-            })
-            .toList();
+        List<Map<String, dynamic>> suggestedTasks =
+            taskProvider.suggestTasks(widget.userName).where((task) {
+          try {
+            String taskDate = task['date'] ?? '';
+            return taskDate == todayDateStr;
+          } catch (_) {
+            return false;
+          }
+        }).toList();
 
         bool hasDisplayedTasks = taskProvider.displayedTasks.isNotEmpty;
         bool needsTasks = remainingPoints > 0;
@@ -823,7 +905,9 @@ class _OverviewScreenState extends State<OverviewScreen> with TickerProviderStat
               const SizedBox(height: 10),
               Column(
                 crossAxisAlignment: CrossAxisAlignment.stretch,
-                children: suggestedTasks.map((task) => _buildSuggestedTaskCard(task, taskProvider)).toList(),
+                children: suggestedTasks
+                    .map((task) => _buildSuggestedTaskCard(task, taskProvider))
+                    .toList(),
               ),
             ],
           ),
@@ -832,7 +916,8 @@ class _OverviewScreenState extends State<OverviewScreen> with TickerProviderStat
     );
   }
 
-  Widget _buildSuggestedTaskCard(Map<String, dynamic> task, TaskProvider taskProvider) {
+  Widget _buildSuggestedTaskCard(
+      Map<String, dynamic> task, TaskProvider taskProvider) {
     Color taskColor = _getTaskColor(task);
     return Container(
       margin: const EdgeInsets.symmetric(vertical: 6),
@@ -854,12 +939,15 @@ class _OverviewScreenState extends State<OverviewScreen> with TickerProviderStat
                 ),
                 Text(
                   task["task"] ?? "Unknown Task",
-                  style: const TextStyle(fontWeight: FontWeight.bold, fontSize: 16),
+                  style: const TextStyle(
+                      fontWeight: FontWeight.bold, fontSize: 16),
                 ),
-                if ((task["catName"] ?? '').toString().trim().isNotEmpty && task["catName"].toString().trim() != '-')
+                if ((task["catName"] ?? '').toString().trim().isNotEmpty &&
+                    task["catName"].toString().trim() != '-')
                   Text(
                     task["catName"],
-                    style: const TextStyle(fontStyle: FontStyle.italic, fontSize: 14),
+                    style: const TextStyle(
+                        fontStyle: FontStyle.italic, fontSize: 14),
                   ),
               ],
             ),
@@ -871,7 +959,8 @@ class _OverviewScreenState extends State<OverviewScreen> with TickerProviderStat
                 mainAxisSize: MainAxisSize.min,
                 children: [
                   Container(
-                    padding: const EdgeInsets.symmetric(horizontal: 10, vertical: 5),
+                    padding:
+                        const EdgeInsets.symmetric(horizontal: 10, vertical: 5),
                     decoration: BoxDecoration(
                       color: Colors.green[100],
                       borderRadius: BorderRadius.circular(7),
@@ -929,7 +1018,8 @@ class _OverviewScreenState extends State<OverviewScreen> with TickerProviderStat
                                       borderRadius: BorderRadius.circular(10),
                                     ),
                                     child: Column(
-                                      crossAxisAlignment: CrossAxisAlignment.start,
+                                      crossAxisAlignment:
+                                          CrossAxisAlignment.start,
                                       children: [
                                         Text(
                                           task["task"],
@@ -942,7 +1032,9 @@ class _OverviewScreenState extends State<OverviewScreen> with TickerProviderStat
                                         const SizedBox(height: 8),
                                         Row(
                                           children: [
-                                            Icon(Icons.star, color: Colors.green[700], size: 20),
+                                            Icon(Icons.star,
+                                                color: Colors.green[700],
+                                                size: 20),
                                             const SizedBox(width: 6),
                                             Text(
                                               "${formatDouble(parsePoints(task["points"]))} Points",
@@ -954,10 +1046,15 @@ class _OverviewScreenState extends State<OverviewScreen> with TickerProviderStat
                                             ),
                                           ],
                                         ),
-                                        if ((task["catName"] ?? '').toString().trim().isNotEmpty &&
-                                            task["catName"].toString().trim() != '-')
+                                        if ((task["catName"] ?? '')
+                                                .toString()
+                                                .trim()
+                                                .isNotEmpty &&
+                                            task["catName"].toString().trim() !=
+                                                '-')
                                           Padding(
-                                            padding: const EdgeInsets.only(top: 8),
+                                            padding:
+                                                const EdgeInsets.only(top: 8),
                                             child: Text(
                                               "Category: ${task["catName"]}",
                                               style: TextStyle(
@@ -992,20 +1089,27 @@ class _OverviewScreenState extends State<OverviewScreen> with TickerProviderStat
                                         style: ElevatedButton.styleFrom(
                                           backgroundColor: Colors.orange[700],
                                           foregroundColor: Colors.white,
-                                          padding: const EdgeInsets.symmetric(horizontal: 20, vertical: 12),
+                                          padding: const EdgeInsets.symmetric(
+                                              horizontal: 20, vertical: 12),
                                           shape: RoundedRectangleBorder(
-                                            borderRadius: BorderRadius.circular(10),
+                                            borderRadius:
+                                                BorderRadius.circular(10),
                                           ),
                                           elevation: 2,
                                         ),
                                         onPressed: () {
-                                          taskProvider.assignTask(task, widget.userName);
+                                          taskProvider.assignTask(
+                                              task, widget.userName);
                                           Navigator.of(context).pop();
-                                          ScaffoldMessenger.of(context).showSnackBar(
+                                          ScaffoldMessenger.of(context)
+                                              .showSnackBar(
                                             SnackBar(
-                                              content: Text("Task '${task["task"]}' assigned to ${widget.userName}."),
-                                              duration: const Duration(seconds: 2),
-                                              backgroundColor: Colors.green[600],
+                                              content: Text(
+                                                  "Task '${task["task"]}' assigned to ${widget.userName}."),
+                                              duration:
+                                                  const Duration(seconds: 2),
+                                              backgroundColor:
+                                                  Colors.green[600],
                                             ),
                                           );
                                         },
@@ -1046,14 +1150,17 @@ class _OverviewScreenState extends State<OverviewScreen> with TickerProviderStat
         DateTime yesterday = today.subtract(const Duration(days: 1));
 
         // Incomplete Yesterday
-        List<Map<String, dynamic>> incompleteTasks = taskProvider.assignedTasks.where((task) {
+        List<Map<String, dynamic>> incompleteTasks =
+            taskProvider.assignedTasks.where((task) {
           bool isForUser = task["assignee"] == widget.userName ||
-              (task["assistant1"] == widget.userName && task["assistant1"] != "none") ||
-              (task["assistant2"] == widget.userName && task["assistant2"] != "none");
+              (task["assistant1"] == widget.userName &&
+                  task["assistant1"] != "none") ||
+              (task["assistant2"] == widget.userName &&
+                  task["assistant2"] != "none");
           if (!isForUser) return false;
           try {
             final taskDate = DateTime.parse(task["date"]);
-            return taskDate.year == yesterday.year && 
+            return taskDate.year == yesterday.year &&
                 taskDate.month == yesterday.month &&
                 taskDate.day == yesterday.day;
           } catch (_) {
@@ -1061,19 +1168,23 @@ class _OverviewScreenState extends State<OverviewScreen> with TickerProviderStat
           }
         }).toList();
 
-        Set<String> incompleteTaskIds = incompleteTasks.map((t) => t["taskID"].toString()).toSet();
+        Set<String> incompleteTaskIds =
+            incompleteTasks.map((t) => t["taskID"].toString()).toSet();
 
         // Assigned Today
-        List<Map<String, dynamic>> tasksToShow = taskProvider.assignedTasks.where((task) {
+        List<Map<String, dynamic>> tasksToShow =
+            taskProvider.assignedTasks.where((task) {
           bool isForUser = task["assignee"] == widget.userName ||
-              (task["assistant1"] == widget.userName && task["assistant1"] != "none") ||
-              (task["assistant2"] == widget.userName && task["assistant2"] != "none");
+              (task["assistant1"] == widget.userName &&
+                  task["assistant1"] != "none") ||
+              (task["assistant2"] == widget.userName &&
+                  task["assistant2"] != "none");
           if (!isForUser) return false;
           if (incompleteTaskIds.contains(task["taskID"])) return false;
           try {
             final taskDate = DateTime.parse(task["date"]);
-            return taskDate.year == today.year && 
-                taskDate.month == today.month && 
+            return taskDate.year == today.year &&
+                taskDate.month == today.month &&
                 taskDate.day == today.day;
           } catch (_) {
             return false;
@@ -1087,7 +1198,7 @@ class _OverviewScreenState extends State<OverviewScreen> with TickerProviderStat
             if (incompleteTasks.isNotEmpty) ...[
               _buildIncompleteTaskList(incompleteTasks),
               const SizedBox(height: 20),
-            ], 
+            ],
             _buildAssignedTaskList(tasksToShow, taskProvider),
             const SizedBox(height: 20),
             _buildCompletedTaskList(),
@@ -1107,7 +1218,9 @@ class _OverviewScreenState extends State<OverviewScreen> with TickerProviderStat
       },
     );
 
-    final pageHeights = pages.map((page) => page.map(estimateTaskHeight).fold(0.0, (a, b) => a + b)).toList();
+    final pageHeights = pages
+        .map((page) => page.map(estimateTaskHeight).fold(0.0, (a, b) => a + b))
+        .toList();
     final maxHeight = pageHeights.isNotEmpty ? pageHeights.reduce(max) : 0.0;
 
     return Container(
@@ -1120,7 +1233,8 @@ class _OverviewScreenState extends State<OverviewScreen> with TickerProviderStat
             children: [
               Icon(Icons.warning_amber_rounded, color: Colors.red),
               SizedBox(width: 10),
-              Text('Incomplete Tasks', style: TextStyle(fontSize: 20, fontWeight: FontWeight.bold)),
+              Text('Incomplete Tasks',
+                  style: TextStyle(fontSize: 20, fontWeight: FontWeight.bold)),
             ],
           ),
           const SizedBox(height: 10),
@@ -1157,25 +1271,42 @@ class _OverviewScreenState extends State<OverviewScreen> with TickerProviderStat
                                 Column(
                                   crossAxisAlignment: CrossAxisAlignment.start,
                                   children: [
-                                    Text(task['taskID'], style: TextStyle(color: Colors.grey[700], fontSize: 12)),
-                                    Text(task['task'], style: const TextStyle(fontWeight: FontWeight.bold, fontSize: 16)),
-                                    if ((task['catName'] ?? '').toString().trim().isNotEmpty && task['catName'].toString().trim() != '-')
-                                      Text(task['catName'], style: const TextStyle(fontStyle: FontStyle.italic, fontSize: 14)),
+                                    Text(task['taskID'],
+                                        style: TextStyle(
+                                            color: Colors.grey[700],
+                                            fontSize: 12)),
+                                    Text(task['task'],
+                                        style: const TextStyle(
+                                            fontWeight: FontWeight.bold,
+                                            fontSize: 16)),
+                                    if ((task['catName'] ?? '')
+                                            .toString()
+                                            .trim()
+                                            .isNotEmpty &&
+                                        task['catName'].toString().trim() !=
+                                            '-')
+                                      Text(task['catName'],
+                                          style: const TextStyle(
+                                              fontStyle: FontStyle.italic,
+                                              fontSize: 14)),
                                   ],
                                 ),
                                 Container(
-                                  padding: const EdgeInsets.symmetric(horizontal: 10, vertical: 5),
+                                  padding: const EdgeInsets.symmetric(
+                                      horizontal: 10, vertical: 5),
                                   decoration: BoxDecoration(
                                     color: Colors.red[100],
                                     borderRadius: BorderRadius.circular(7),
                                   ),
                                   child: Text(
                                     '${formatDouble(parsePoints(task['points'] ?? 0))} pts',
-                                    style: TextStyle(color: Colors.red[900], fontWeight: FontWeight.w600),
+                                    style: TextStyle(
+                                        color: Colors.red[900],
+                                        fontWeight: FontWeight.w600),
                                   ),
                                 ),
                               ],
-                            ),  
+                            ),
                           );
                         }).toList(),
                       ),
@@ -1194,7 +1325,9 @@ class _OverviewScreenState extends State<OverviewScreen> with TickerProviderStat
                               margin: const EdgeInsets.symmetric(vertical: 6),
                               decoration: BoxDecoration(
                                 shape: BoxShape.circle,
-                                color: _incompletePage == index ? Colors.red : Colors.red[100],
+                                color: _incompletePage == index
+                                    ? Colors.red
+                                    : Colors.red[100],
                               ),
                             ),
                           ),
@@ -1210,21 +1343,28 @@ class _OverviewScreenState extends State<OverviewScreen> with TickerProviderStat
     );
   }
 
-  Widget _buildAssignedTaskList(List<Map<String, dynamic>> tasksToShow, TaskProvider taskProvider) {
+  Widget _buildAssignedTaskList(
+      List<Map<String, dynamic>> tasksToShow, TaskProvider taskProvider) {
     return Consumer<TaskProvider>(
       builder: (context, taskProvider, child) {
         final pages = List.generate(
           (tasksToShow.length / 3).ceil(),
           (i) {
             final start = i * 3;
-            final end = (start + 3 > tasksToShow.length) ? tasksToShow.length : start + 3;
+            final end = (start + 3 > tasksToShow.length)
+                ? tasksToShow.length
+                : start + 3;
             return tasksToShow.sublist(start, end);
           },
         );
 
-        final pageHeights = pages.map((page) => page.map(estimateTaskHeight).fold(0.0, (a, b) => a + b)).toList();
-        final maxHeight = pageHeights.isNotEmpty ? pageHeights.reduce(max) : 0.0;
-        
+        final pageHeights = pages
+            .map((page) =>
+                page.map(estimateTaskHeight).fold(0.0, (a, b) => a + b))
+            .toList();
+        final maxHeight =
+            pageHeights.isNotEmpty ? pageHeights.reduce(max) : 0.0;
+
         return Container(
           padding: const EdgeInsets.fromLTRB(20, 20, 10, 20),
           decoration: _boxDecoration(),
@@ -1235,12 +1375,16 @@ class _OverviewScreenState extends State<OverviewScreen> with TickerProviderStat
                 children: [
                   Icon(Icons.assignment_outlined, color: Colors.orange),
                   SizedBox(width: 10),
-                  Text('Assigned Tasks', style: TextStyle(fontSize: 20, fontWeight: FontWeight.bold)),
+                  Text('Assigned Tasks',
+                      style:
+                          TextStyle(fontSize: 20, fontWeight: FontWeight.bold)),
                 ],
               ),
               const SizedBox(height: 10),
               if (tasksToShow.isEmpty)
-                const Center(child: Text('No tasks assigned', style: TextStyle(color: Colors.grey)))
+                const Center(
+                    child: Text('No tasks assigned',
+                        style: TextStyle(color: Colors.grey)))
               else
                 SizedBox(
                   height: maxHeight,
@@ -1272,9 +1416,13 @@ class _OverviewScreenState extends State<OverviewScreen> with TickerProviderStat
                                   _getTaskColor(task),
                                   taskProvider,
                                   (task["taskID"] ?? '').startsWith("GR"),
-                                  isAssisting: task["assignee"] != widget.userName &&
-                                    ((task["assistant1"] == widget.userName && task["assistant1"] != "none") ||
-                                     (task["assistant2"] == widget.userName && task["assistant2"] != "none")),
+                                  isAssisting: task["assignee"] !=
+                                          widget.userName &&
+                                      ((task["assistant1"] == widget.userName &&
+                                              task["assistant1"] != "none") ||
+                                          (task["assistant2"] ==
+                                                  widget.userName &&
+                                              task["assistant2"] != "none")),
                                 );
                               }).toList(),
                             ),
@@ -1290,20 +1438,23 @@ class _OverviewScreenState extends State<OverviewScreen> with TickerProviderStat
                                   (index) => Container(
                                     width: 8,
                                     height: 8,
-                                    margin: const EdgeInsets.symmetric(vertical: 6),
+                                    margin:
+                                        const EdgeInsets.symmetric(vertical: 6),
                                     decoration: BoxDecoration(
                                       shape: BoxShape.circle,
-                                      color: _assignedPage == index ? Colors.orange : Colors.orange[100],
+                                      color: _assignedPage == index
+                                          ? Colors.orange
+                                          : Colors.orange[100],
                                     ),
                                   ),
                                 ),
                               ),
                             ),
-                      ],
-                    );
-                  },
-                ),
-              )
+                        ],
+                      );
+                    },
+                  ),
+                )
             ],
           ),
         );
@@ -1315,38 +1466,45 @@ class _OverviewScreenState extends State<OverviewScreen> with TickerProviderStat
     return Consumer<TaskProvider>(
       builder: (context, taskProvider, child) {
         DateTime today = DateTime.now();
-        List<Map<String, dynamic>> tasksToShow = taskProvider.completedTasks.where((task) {
+        List<Map<String, dynamic>> tasksToShow =
+            taskProvider.completedTasks.where((task) {
           bool isForUser = task["assignee"] == widget.userName ||
               task["assistant1"] == widget.userName ||
               task["assistant2"] == widget.userName;
           if (!isForUser) return false;
-          
+
           try {
             final taskDate = DateTime.parse(task["date"]);
             return taskDate.year == today.year &&
-                   taskDate.month == today.month &&
-                   taskDate.day == today.day;
+                taskDate.month == today.month &&
+                taskDate.day == today.day;
           } catch (_) {
             return false;
           }
         }).map((task) {
           if (task["assignee"] != widget.userName) {
-          return {...task, "isAssisting": true};
+            return {...task, "isAssisting": true};
           }
-          return task;  
+          return task;
         }).toList();
 
         final pages = List.generate(
           (tasksToShow.length / 3).ceil(),
           (i) {
             final start = i * 3;
-            final end = (start + 3 > tasksToShow.length) ? tasksToShow.length : start + 3;
+            final end = (start + 3 > tasksToShow.length)
+                ? tasksToShow.length
+                : start + 3;
             return tasksToShow.sublist(start, end);
           },
         );
 
-        final pageHeights = pages.map((page) => page.map(estimateTaskHeight).fold(0.0, (a, b) => a + b)).toList();
-        final maxHeight = pageHeights.isNotEmpty ? pageHeights.reduce(max) : 0.0;
+        final pageHeights = pages
+            .map((page) =>
+                page.map(estimateTaskHeight).fold(0.0, (a, b) => a + b))
+            .toList();
+        final maxHeight =
+            pageHeights.isNotEmpty ? pageHeights.reduce(max) : 0.0;
 
         return Container(
           padding: const EdgeInsets.fromLTRB(20, 20, 10, 20),
@@ -1358,12 +1516,16 @@ class _OverviewScreenState extends State<OverviewScreen> with TickerProviderStat
                 children: [
                   Icon(Icons.check_circle_outlined, color: Colors.green),
                   SizedBox(width: 10),
-                  Text('Completed Tasks', style: TextStyle(fontSize: 20, fontWeight: FontWeight.bold)),
+                  Text('Completed Tasks',
+                      style:
+                          TextStyle(fontSize: 20, fontWeight: FontWeight.bold)),
                 ],
               ),
               const SizedBox(height: 10),
               if (tasksToShow.isEmpty)
-                const Center(child: Text('No tasks completed yet', style: TextStyle(color: Colors.grey)))
+                const Center(
+                    child: Text('No tasks completed yet',
+                        style: TextStyle(color: Colors.grey)))
               else
                 SizedBox(
                   height: maxHeight,
@@ -1386,35 +1548,55 @@ class _OverviewScreenState extends State<OverviewScreen> with TickerProviderStat
                               children: taskSlice.map((task) {
                                 Color taskColor = _getTaskColor(task);
                                 return Container(
-                                  margin: const EdgeInsets.symmetric(vertical: 6),
+                                  margin:
+                                      const EdgeInsets.symmetric(vertical: 6),
                                   padding: const EdgeInsets.all(15),
                                   decoration: BoxDecoration(
                                     color: taskColor,
                                     borderRadius: BorderRadius.circular(10),
                                   ),
                                   child: Row(
-                                    mainAxisAlignment: MainAxisAlignment.spaceBetween,
+                                    mainAxisAlignment:
+                                        MainAxisAlignment.spaceBetween,
                                     children: [
                                       Column(
-                                        crossAxisAlignment: CrossAxisAlignment.start,
+                                        crossAxisAlignment:
+                                            CrossAxisAlignment.start,
                                         children: [
-                                          Text(task['taskID'], style: TextStyle(color: Colors.grey[700], fontSize: 12)),
-                                          Text(task['task'], style: const TextStyle(fontWeight: FontWeight.bold, fontSize: 16)),
-                                          if ((task['catName'] ?? '').isNotEmpty)
-                                            Text(task['catName'], style: const TextStyle(fontStyle: FontStyle.italic, fontSize: 14)),
+                                          Text(task['taskID'],
+                                              style: TextStyle(
+                                                  color: Colors.grey[700],
+                                                  fontSize: 12)),
+                                          Text(task['task'],
+                                              style: const TextStyle(
+                                                  fontWeight: FontWeight.bold,
+                                                  fontSize: 16)),
+                                          if ((task['catName'] ?? '')
+                                              .isNotEmpty)
+                                            Text(task['catName'],
+                                                style: const TextStyle(
+                                                    fontStyle: FontStyle.italic,
+                                                    fontSize: 14)),
                                           if (task["isAssisting"] == true)
-                                            const Text("(Assisting)", style: TextStyle(fontSize: 12, color: Colors.white)),
+                                            const Text("(Assisting)",
+                                                style: TextStyle(
+                                                    fontSize: 12,
+                                                    color: Colors.white)),
                                         ],
                                       ),
                                       Container(
-                                        padding: const EdgeInsets.symmetric(horizontal: 10, vertical: 5),
+                                        padding: const EdgeInsets.symmetric(
+                                            horizontal: 10, vertical: 5),
                                         decoration: BoxDecoration(
                                           color: Colors.green[100],
-                                          borderRadius: BorderRadius.circular(7),
+                                          borderRadius:
+                                              BorderRadius.circular(7),
                                         ),
                                         child: Text(
                                           '${formatDouble(parsePoints(task['points'] ?? 0))} pts',
-                                          style: TextStyle(color: Colors.green[900], fontWeight: FontWeight.w600),
+                                          style: TextStyle(
+                                              color: Colors.green[900],
+                                              fontWeight: FontWeight.w600),
                                         ),
                                       ),
                                     ],
@@ -1434,10 +1616,13 @@ class _OverviewScreenState extends State<OverviewScreen> with TickerProviderStat
                                   (index) => Container(
                                     width: 8,
                                     height: 8,
-                                    margin: const EdgeInsets.symmetric(vertical: 6),
+                                    margin:
+                                        const EdgeInsets.symmetric(vertical: 6),
                                     decoration: BoxDecoration(
                                       shape: BoxShape.circle,
-                                      color: _completedPage == index ? Colors.green : Colors.green[100],
+                                      color: _completedPage == index
+                                          ? Colors.green
+                                          : Colors.green[100],
                                     ),
                                   ),
                                 ),
@@ -1447,7 +1632,7 @@ class _OverviewScreenState extends State<OverviewScreen> with TickerProviderStat
                       );
                     },
                   ),
-                )            
+                )
             ],
           ),
         );
@@ -1465,17 +1650,23 @@ class _OverviewScreenState extends State<OverviewScreen> with TickerProviderStat
     bool isGroomingTask, {
     bool isAssisting = false,
   }) {
-    String? selectedAssistant1 = taskProvider.assignedTasks
-        .firstWhere((task) => task['taskID'] == id, orElse: () => {})['assistant1'];
-    String? selectedAssistant2 = taskProvider.assignedTasks
-        .firstWhere((task) => task['taskID'] == id, orElse: () => {})['assistant2'];
-    String priority = taskProvider.assignedTasks
-        .firstWhere((task) => task['taskID'] == id, orElse: () => {})['priority'] ?? 'no';
+    String? selectedAssistant1 = taskProvider.assignedTasks.firstWhere(
+        (task) => task['taskID'] == id,
+        orElse: () => {})['assistant1'];
+    String? selectedAssistant2 = taskProvider.assignedTasks.firstWhere(
+        (task) => task['taskID'] == id,
+        orElse: () => {})['assistant2'];
+    String priority = taskProvider.assignedTasks.firstWhere(
+            (task) => task['taskID'] == id,
+            orElse: () => {})['priority'] ??
+        'no';
     bool isPriority = priority == 'high';
 
     // Convert 'none' to null for dropdown values
-    selectedAssistant1 = (selectedAssistant1 == 'none') ? null : selectedAssistant1;
-    selectedAssistant2 = (selectedAssistant2 == 'none') ? null : selectedAssistant2;
+    selectedAssistant1 =
+        (selectedAssistant1 == 'none') ? null : selectedAssistant1;
+    selectedAssistant2 =
+        (selectedAssistant2 == 'none') ? null : selectedAssistant2;
 
     Color priorityColor;
     IconData priorityIcon;
@@ -1491,309 +1682,422 @@ class _OverviewScreenState extends State<OverviewScreen> with TickerProviderStat
     }
 
     return FutureBuilder<bool>(
-      future: widget.role == 'manager' ? taskProvider.isTomorrowPlanningComplete() : Future.value(true),
-      builder: (context, snapshot) {
-        bool isPlanningComplete = snapshot.data ?? false;
-        bool canCompleteTask = widget.role != 'manager' || (widget.role == 'manager' && isPlanningComplete && !isAssisting);
+        future: widget.role == 'manager'
+            ? taskProvider.isTomorrowPlanningComplete()
+            : Future.value(true),
+        builder: (context, snapshot) {
+          bool isPlanningComplete = snapshot.data ?? false;
+          bool canCompleteTask = widget.role != 'manager' ||
+              (widget.role == 'manager' && isPlanningComplete && !isAssisting);
 
-        return Padding(
-          padding: const EdgeInsets.symmetric(vertical: 6),
-          child: Slidable(
-            key: ValueKey(id),
-            closeOnScroll: true,
-            endActionPane: ActionPane(
-              motion: DrawerMotion(),
-              extentRatio: 0.20,
-              children: [
-                if (!isAssisting && canCompleteTask)
-                  SlidableAction(
-                    onPressed: (context) {
-                      final today = DateFormat('yyyy-MM-dd').format(DateTime.now());
-                      final task = taskProvider.assignedTasks.firstWhere((t) => t["taskID"] == id, orElse: () => {});
-                      if (task.isNotEmpty && (task["date"] == null || task["date"].toString().isEmpty)) {
-                        task["date"] = today;
-                        print("Date was missing — set task[\"date\"] to today: $today for taskID: ${task["taskID"]}");
-                      }
-                      taskProvider.completeTask(id);
-                    },
-                    backgroundColor: Colors.green,
-                    foregroundColor: Colors.white,
-                    icon: Icons.check,
-                    label: 'Complete',
-                  ),
-                  if (!isAssisting && !canCompleteTask)
-                  SlidableAction(
-                    onPressed: (context) {
-                      ScaffoldMessenger.of(context).showSnackBar(
-                        const SnackBar(
-                          content: Text("Please complete tomorrow's planning to mark tasks as complete."),
-                          duration: Duration(seconds: 3),
-                        ),
-                      );
-                    },
-                    backgroundColor: Colors.grey[400]!,
-                    foregroundColor: Colors.white,
-                    icon: Icons.lock,
-                    label: 'Locked',
-                  ),
-              ],
-            ),
-            child: Container(
-              padding: const EdgeInsets.all(15),
-              decoration: BoxDecoration(
-                color: color,
-                borderRadius: BorderRadius.circular(10),
-              ),
-              child: IntrinsicHeight(
-                child: Row(
-                  crossAxisAlignment: CrossAxisAlignment.start,
-                  mainAxisAlignment: MainAxisAlignment.spaceBetween,
+          return Padding(
+              padding: const EdgeInsets.symmetric(vertical: 6),
+              child: Slidable(
+                key: ValueKey(id),
+                closeOnScroll: true,
+                endActionPane: ActionPane(
+                  motion: DrawerMotion(),
+                  extentRatio: 0.20,
                   children: [
-                    // Left Column: Task Details
-                    Expanded(
-                      child: Column(
-                        crossAxisAlignment: CrossAxisAlignment.start,
-                        children: [
-                          Text(id, style: TextStyle(color: Colors.grey[700], fontSize: 12)),
-                          Text(title, style: const TextStyle(fontWeight: FontWeight.bold, fontSize: 16),
-                            overflow: TextOverflow.ellipsis,
-                            maxLines: 1,
-                          ),
-                          if (catName.trim().isNotEmpty && catName.trim() != '-')
-                          Text(
-                            catName,
-                            style: const TextStyle(fontStyle: FontStyle.italic, fontSize: 14),
-                            overflow: TextOverflow.ellipsis,
-                            maxLines: 1,
-                          ),
-                          if (isAssisting)
-                            const Text("(Assisting)", style: TextStyle(fontSize: 12, color: Colors.white)),
-                        ],
+                    if (!isAssisting && canCompleteTask)
+                      SlidableAction(
+                        onPressed: (context) {
+                          final today =
+                              DateFormat('yyyy-MM-dd').format(DateTime.now());
+                          final task = taskProvider.assignedTasks.firstWhere(
+                              (t) => t["taskID"] == id,
+                              orElse: () => {});
+                          if (task.isNotEmpty &&
+                              (task["date"] == null ||
+                                  task["date"].toString().isEmpty)) {
+                            task["date"] = today;
+                            print(
+                                "Date was missing — set task[\"date\"] to today: $today for taskID: ${task["taskID"]}");
+                          }
+                          taskProvider.completeTask(id);
+                        },
+                        backgroundColor: Colors.green,
+                        foregroundColor: Colors.white,
+                        icon: Icons.check,
+                        label: 'Complete',
                       ),
-                    ),
-                    // Right Column: Action Elements
-                    Column(
-                      mainAxisAlignment: isPriority ? MainAxisAlignment.start : MainAxisAlignment.center,
-                      crossAxisAlignment: CrossAxisAlignment.end,
+                    if (!isAssisting && !canCompleteTask)
+                      SlidableAction(
+                        onPressed: (context) {
+                          ScaffoldMessenger.of(context).showSnackBar(
+                            const SnackBar(
+                              content: Text(
+                                  "Please complete tomorrow's planning to mark tasks as complete."),
+                              duration: Duration(seconds: 3),
+                            ),
+                          );
+                        },
+                        backgroundColor: Colors.grey[400]!,
+                        foregroundColor: Colors.white,
+                        icon: Icons.lock,
+                        label: 'Locked',
+                      ),
+                  ],
+                ),
+                child: Container(
+                  padding: const EdgeInsets.all(15),
+                  decoration: BoxDecoration(
+                    color: color,
+                    borderRadius: BorderRadius.circular(10),
+                  ),
+                  child: IntrinsicHeight(
+                    child: Row(
+                      crossAxisAlignment: CrossAxisAlignment.start,
+                      mainAxisAlignment: MainAxisAlignment.spaceBetween,
                       children: [
-                        if (isPriority)
-                          Column(
+                        // Left Column: Task Details
+                        Expanded(
+                          child: Column(
+                            crossAxisAlignment: CrossAxisAlignment.start,
                             children: [
-                              Icon(
-                                priorityIcon,
-                                color: priorityColor,
-                                size: 22,
+                              Text(id,
+                                  style: TextStyle(
+                                      color: Colors.grey[700], fontSize: 12)),
+                              Text(
+                                title,
+                                style: const TextStyle(
+                                    fontWeight: FontWeight.bold, fontSize: 16),
+                                overflow: TextOverflow.ellipsis,
+                                maxLines: 1,
                               ),
-                              const SizedBox(height: 4),
+                              if (catName.trim().isNotEmpty &&
+                                  catName.trim() != '-')
+                                Text(
+                                  catName,
+                                  style: const TextStyle(
+                                      fontStyle: FontStyle.italic,
+                                      fontSize: 14),
+                                  overflow: TextOverflow.ellipsis,
+                                  maxLines: 1,
+                                ),
+                              if (isAssisting)
+                                const Text("(Assisting)",
+                                    style: TextStyle(
+                                        fontSize: 12, color: Colors.white)),
                             ],
                           ),
-                        Row(
-                          crossAxisAlignment: CrossAxisAlignment.center,
+                        ),
+                        // Right Column: Action Elements
+                        Column(
+                          mainAxisAlignment: isPriority
+                              ? MainAxisAlignment.start
+                              : MainAxisAlignment.center,
+                          crossAxisAlignment: CrossAxisAlignment.end,
                           children: [
-                            if (isGroomingTask && !isAssisting)
-                              Padding(
-                                padding: const EdgeInsets.only(bottom: 5),
-                                child: Container(
-                                  height: 30,
-                                  child: PopupMenuButton<String>(
-                                    icon: Icon(
-                                      Icons.person_add,
-                                      color: Colors.green[800],
-                                      size: 22,
-                                    ),
-                                    onSelected: (value) {},
-                                    itemBuilder: (BuildContext context) {
-                                      return [
-                                        PopupMenuItem<String>(
-                                          enabled: false,
-                                          child: StatefulBuilder(
-                                            builder: (BuildContext context, StateSetter setState) {
-                                              List<String> availableAssistants = staffMembers
-                                                  .where((staff) => staff != widget.userName)
-                                                  .toList();
-                                              List<String> assistant2Options = selectedAssistant1 != null
-                                                  ? availableAssistants
-                                                      .where((staff) => staff != selectedAssistant1)
-                                                      .toList()
-                                                  : availableAssistants;
+                            if (isPriority)
+                              Column(
+                                children: [
+                                  Icon(
+                                    priorityIcon,
+                                    color: priorityColor,
+                                    size: 22,
+                                  ),
+                                  const SizedBox(height: 4),
+                                ],
+                              ),
+                            Row(
+                              crossAxisAlignment: CrossAxisAlignment.center,
+                              children: [
+                                if (isGroomingTask && !isAssisting)
+                                  Padding(
+                                    padding: const EdgeInsets.only(bottom: 5),
+                                    child: Container(
+                                      height: 30,
+                                      child: PopupMenuButton<String>(
+                                        icon: Icon(
+                                          Icons.person_add,
+                                          color: Colors.green[800],
+                                          size: 22,
+                                        ),
+                                        onSelected: (value) {},
+                                        itemBuilder: (BuildContext context) {
+                                          return [
+                                            PopupMenuItem<String>(
+                                              enabled: false,
+                                              child: StatefulBuilder(
+                                                builder: (BuildContext context,
+                                                    StateSetter setState) {
+                                                  List<String>
+                                                      availableAssistants =
+                                                      staffMembers
+                                                          .where((staff) =>
+                                                              staff !=
+                                                              widget.userName)
+                                                          .toList();
+                                                  List<String>
+                                                      assistant2Options =
+                                                      selectedAssistant1 != null
+                                                          ? availableAssistants
+                                                              .where((staff) =>
+                                                                  staff !=
+                                                                  selectedAssistant1)
+                                                              .toList()
+                                                          : availableAssistants;
 
-                                              return Column(
-                                                mainAxisSize: MainAxisSize.min,
-                                                children: [
-                                                  Row(
+                                                  return Column(
+                                                    mainAxisSize:
+                                                        MainAxisSize.min,
                                                     children: [
-                                                      const Text("Assistant 1: ", style: TextStyle(fontSize: 14)),
-                                                      SizedBox(
-                                                        width: 120,
-                                                        child: DropdownButton<String>(
-                                                          value: selectedAssistant1,
-                                                          isExpanded: true,
-                                                          hint: const Text("Select", style: TextStyle(fontSize: 14)),
-                                                          items: availableAssistants.map((String staff) {
-                                                            return DropdownMenuItem<String>(
-                                                              value: staff,
-                                                              child: Text(
-                                                                staff,
-                                                                overflow: TextOverflow.ellipsis,
-                                                                style: const TextStyle(fontSize: 14),
-                                                              ),
-                                                            );
-                                                          }).toList(),
-                                                          onChanged: (String? newValue) {
-                                                            setState(() {
-                                                              selectedAssistant1 = newValue;
-                                                              taskProvider.assignAssistant(id, selectedAssistant1, selectedAssistant2);
-                                                              if (newValue != null) {
-                                                                ScaffoldMessenger.of(context).showSnackBar(
-                                                                  SnackBar(
-                                                                    content: Text("Assigned $newValue as Assistant 1 for '$title'."),
-                                                                    duration: const Duration(seconds: 2),
+                                                      Row(
+                                                        children: [
+                                                          const Text(
+                                                              "Assistant 1: ",
+                                                              style: TextStyle(
+                                                                  fontSize:
+                                                                      14)),
+                                                          SizedBox(
+                                                            width: 120,
+                                                            child:
+                                                                DropdownButton<
+                                                                    String>(
+                                                              value:
+                                                                  selectedAssistant1,
+                                                              isExpanded: true,
+                                                              hint: const Text(
+                                                                  "Select",
+                                                                  style: TextStyle(
+                                                                      fontSize:
+                                                                          14)),
+                                                              items: availableAssistants
+                                                                  .map((String
+                                                                      staff) {
+                                                                return DropdownMenuItem<
+                                                                    String>(
+                                                                  value: staff,
+                                                                  child: Text(
+                                                                    staff,
+                                                                    overflow:
+                                                                        TextOverflow
+                                                                            .ellipsis,
+                                                                    style: const TextStyle(
+                                                                        fontSize:
+                                                                            14),
                                                                   ),
                                                                 );
-                                                              }
-                                                            });
-                                                            Navigator.pop(context);
-                                                          },
-                                                        ),
-                                                      ),
-                                                      IconButton(
-                                                        icon: const Icon(
-                                                          Icons.delete,
-                                                          color: Colors.red,
-                                                          size: 20,
-                                                        ),
-                                                        onPressed: selectedAssistant1 != null
-                                                            ? () {
+                                                              }).toList(),
+                                                              onChanged: (String?
+                                                                  newValue) {
                                                                 setState(() {
-                                                                  String? removedAssistant = selectedAssistant1;
-                                                                  if (selectedAssistant2 != null) {
-                                                                    selectedAssistant1 = selectedAssistant2;
-                                                                    selectedAssistant2 = null;
-                                                                    taskProvider.assignAssistant(id, selectedAssistant1, null);
-                                                                    ScaffoldMessenger.of(context).showSnackBar(
+                                                                  selectedAssistant1 =
+                                                                      newValue;
+                                                                  taskProvider.assignAssistant(
+                                                                      id,
+                                                                      selectedAssistant1,
+                                                                      selectedAssistant2);
+                                                                  if (newValue !=
+                                                                      null) {
+                                                                    ScaffoldMessenger.of(
+                                                                            context)
+                                                                        .showSnackBar(
                                                                       SnackBar(
-                                                                        content: Text(
-                                                                            "Removed $removedAssistant as Assistant 1 from '$title'."),
-                                                                        duration: const Duration(seconds: 2),
-                                                                      ),
-                                                                    );
-                                                                  } else {
-                                                                    selectedAssistant1 = null;
-                                                                    taskProvider.assignAssistant(id, null, null);
-                                                                    ScaffoldMessenger.of(context).showSnackBar(
-                                                                      SnackBar(
-                                                                        content: Text(
-                                                                          "Removed $removedAssistant as Assistant 1 from '$title'."),
-                                                                          duration: const Duration(seconds: 2),
+                                                                        content:
+                                                                            Text("Assigned $newValue as Assistant 1 for '$title'."),
+                                                                        duration:
+                                                                            const Duration(seconds: 2),
                                                                       ),
                                                                     );
                                                                   }
                                                                 });
-                                                                Navigator.pop(context);
-                                                              }
-                                                            : null,
+                                                                Navigator.pop(
+                                                                    context);
+                                                              },
+                                                            ),
+                                                          ),
+                                                          IconButton(
+                                                            icon: const Icon(
+                                                              Icons.delete,
+                                                              color: Colors.red,
+                                                              size: 20,
+                                                            ),
+                                                            onPressed:
+                                                                selectedAssistant1 !=
+                                                                        null
+                                                                    ? () {
+                                                                        setState(
+                                                                            () {
+                                                                          String?
+                                                                              removedAssistant =
+                                                                              selectedAssistant1;
+                                                                          if (selectedAssistant2 !=
+                                                                              null) {
+                                                                            selectedAssistant1 =
+                                                                                selectedAssistant2;
+                                                                            selectedAssistant2 =
+                                                                                null;
+                                                                            taskProvider.assignAssistant(
+                                                                                id,
+                                                                                selectedAssistant1,
+                                                                                null);
+                                                                            ScaffoldMessenger.of(context).showSnackBar(
+                                                                              SnackBar(
+                                                                                content: Text("Removed $removedAssistant as Assistant 1 from '$title'."),
+                                                                                duration: const Duration(seconds: 2),
+                                                                              ),
+                                                                            );
+                                                                          } else {
+                                                                            selectedAssistant1 =
+                                                                                null;
+                                                                            taskProvider.assignAssistant(
+                                                                                id,
+                                                                                null,
+                                                                                null);
+                                                                            ScaffoldMessenger.of(context).showSnackBar(
+                                                                              SnackBar(
+                                                                                content: Text("Removed $removedAssistant as Assistant 1 from '$title'."),
+                                                                                duration: const Duration(seconds: 2),
+                                                                              ),
+                                                                            );
+                                                                          }
+                                                                        });
+                                                                        Navigator.pop(
+                                                                            context);
+                                                                      }
+                                                                    : null,
+                                                          ),
+                                                        ],
                                                       ),
-                                                    ],
-                                                  ),
-                                                  Row(
-                                                    children: [
-                                                      const Text("Assistant 2: ", style: TextStyle(fontSize: 14)),
-                                                      SizedBox(
-                                                        width: 120,
-                                                        child: DropdownButton<String>(
-                                                          value: selectedAssistant2,
-                                                          isExpanded: true,
-                                                          hint: const Text("Select", style: TextStyle(fontSize: 14)),
-                                                          items: assistant2Options.map((String staff) {
-                                                            return DropdownMenuItem<String>(
-                                                              value: staff,
-                                                              child: Text(
-                                                                staff,
-                                                                overflow: TextOverflow.ellipsis,
-                                                                style: const TextStyle(fontSize: 14),
-                                                              ),
-                                                            );
-                                                          }).toList(),
-                                                          onChanged: (String? newValue) {
-                                                            setState(() {
-                                                              selectedAssistant2 = newValue;
-                                                              taskProvider.assignAssistant(id, selectedAssistant1, selectedAssistant2);
-                                                              if (newValue != null) {
-                                                                ScaffoldMessenger.of(context).showSnackBar(
-                                                                  SnackBar(
-                                                                    content: Text("Assigned $newValue as Assistant 2 for '$title'."),
-                                                                    duration: const Duration(seconds: 2),
+                                                      Row(
+                                                        children: [
+                                                          const Text(
+                                                              "Assistant 2: ",
+                                                              style: TextStyle(
+                                                                  fontSize:
+                                                                      14)),
+                                                          SizedBox(
+                                                            width: 120,
+                                                            child:
+                                                                DropdownButton<
+                                                                    String>(
+                                                              value:
+                                                                  selectedAssistant2,
+                                                              isExpanded: true,
+                                                              hint: const Text(
+                                                                  "Select",
+                                                                  style: TextStyle(
+                                                                      fontSize:
+                                                                          14)),
+                                                              items: assistant2Options
+                                                                  .map((String
+                                                                      staff) {
+                                                                return DropdownMenuItem<
+                                                                    String>(
+                                                                  value: staff,
+                                                                  child: Text(
+                                                                    staff,
+                                                                    overflow:
+                                                                        TextOverflow
+                                                                            .ellipsis,
+                                                                    style: const TextStyle(
+                                                                        fontSize:
+                                                                            14),
                                                                   ),
                                                                 );
-                                                              }
-                                                            });
-                                                            Navigator.pop(context);
-                                                          },
-                                                        ),
-                                                      ),
-                                                      IconButton(
-                                                        icon: const Icon(
-                                                          Icons.delete,
-                                                          color: Colors.red,
-                                                          size: 20,
-                                                        ),
-                                                        onPressed: selectedAssistant2 != null
-                                                            ? () {
+                                                              }).toList(),
+                                                              onChanged: (String?
+                                                                  newValue) {
                                                                 setState(() {
-                                                                  String? removedAssistant = selectedAssistant2;
-                                                                  selectedAssistant2 = null;
-                                                                  taskProvider.assignAssistant(id, selectedAssistant1, null);
-                                                                  ScaffoldMessenger.of(context).showSnackBar(
-                                                                    SnackBar(
-                                                                      content:
-                                                                          Text("Removed $removedAssistant as Assistant 2 from '$title'."),
-                                                                      duration: const Duration(seconds: 2),
-                                                                    ),
-                                                                  );
+                                                                  selectedAssistant2 =
+                                                                      newValue;
+                                                                  taskProvider.assignAssistant(
+                                                                      id,
+                                                                      selectedAssistant1,
+                                                                      selectedAssistant2);
+                                                                  if (newValue !=
+                                                                      null) {
+                                                                    ScaffoldMessenger.of(
+                                                                            context)
+                                                                        .showSnackBar(
+                                                                      SnackBar(
+                                                                        content:
+                                                                            Text("Assigned $newValue as Assistant 2 for '$title'."),
+                                                                        duration:
+                                                                            const Duration(seconds: 2),
+                                                                      ),
+                                                                    );
+                                                                  }
                                                                 });
-                                                                Navigator.pop(context);
-                                                              }
-                                                            : null,
+                                                                Navigator.pop(
+                                                                    context);
+                                                              },
+                                                            ),
+                                                          ),
+                                                          IconButton(
+                                                            icon: const Icon(
+                                                              Icons.delete,
+                                                              color: Colors.red,
+                                                              size: 20,
+                                                            ),
+                                                            onPressed:
+                                                                selectedAssistant2 !=
+                                                                        null
+                                                                    ? () {
+                                                                        setState(
+                                                                            () {
+                                                                          String?
+                                                                              removedAssistant =
+                                                                              selectedAssistant2;
+                                                                          selectedAssistant2 =
+                                                                              null;
+                                                                          taskProvider.assignAssistant(
+                                                                              id,
+                                                                              selectedAssistant1,
+                                                                              null);
+                                                                          ScaffoldMessenger.of(context)
+                                                                              .showSnackBar(
+                                                                            SnackBar(
+                                                                              content: Text("Removed $removedAssistant as Assistant 2 from '$title'."),
+                                                                              duration: const Duration(seconds: 2),
+                                                                            ),
+                                                                          );
+                                                                        });
+                                                                        Navigator.pop(
+                                                                            context);
+                                                                      }
+                                                                    : null,
+                                                          ),
+                                                        ],
                                                       ),
                                                     ],
-                                                  ),
-                                                ],
-                                              );
-                                            },
-                                          ),
-                                        ),
-                                      ];
-                                    },
+                                                  );
+                                                },
+                                              ),
+                                            ),
+                                          ];
+                                        },
+                                      ),
+                                    ),
+                                  ),
+                                const SizedBox(width: 20),
+                                Container(
+                                  padding: const EdgeInsets.symmetric(
+                                      horizontal: 10, vertical: 5),
+                                  decoration: BoxDecoration(
+                                    color: Colors.green[100],
+                                    borderRadius: BorderRadius.circular(7),
+                                  ),
+                                  child: Text(
+                                    '${formatDouble(points)} pts',
+                                    style: TextStyle(
+                                      color: Colors.green[900],
+                                      fontWeight: FontWeight.w600,
+                                    ),
                                   ),
                                 ),
-                              ),
-                            const SizedBox(width: 20),
-                            Container(
-                              padding: const EdgeInsets.symmetric(horizontal: 10, vertical: 5),
-                              decoration: BoxDecoration(
-                                color: Colors.green[100],
-                                borderRadius: BorderRadius.circular(7),
-                              ),
-                              child: Text(
-                                '${formatDouble(points)} pts',
-                                style: TextStyle(
-                                  color: Colors.green[900],
-                                  fontWeight: FontWeight.w600,
-                                ),
-                              ),
+                              ],
                             ),
                           ],
                         ),
                       ],
                     ),
-                  ],
+                  ),
                 ),
-              ),
-            ),
-          )
-        );
-      }
-    );
+              ));
+        });
   }
 
   Color _getTaskColor(Map<String, dynamic> task) {

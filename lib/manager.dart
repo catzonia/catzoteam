@@ -6,8 +6,8 @@ import 'package:collection/collection.dart';
 import 'package:catzoteam/provider.dart';
 import 'package:catzoteam/models/double.dart';
 import 'package:catzoteam/models/painter.dart';
-import 'package:catzoteam/widgets/staff_selector_dialog.dart';
 import 'package:catzoteam/models/task_category.dart'; 
+import 'package:catzoteam/widgets/staff_selector_dialog.dart';
 import 'package:intl/intl.dart';
 import 'dart:async';
 import 'dart:math';
@@ -93,6 +93,19 @@ class _ManagerScreenState extends State<ManagerScreen> {
     _fetchStaffMembers();
     _debugListPointsDocuments();
     _debugListSchedulesDocuments();
+    // Check planning status and show dialog if incomplete
+    WidgetsBinding.instance.addPostFrameCallback((_) {
+      _checkAndShowPlanningDialog();
+    });
+  }
+
+  @override
+  void dispose() {
+    if (_futurePopup?.mounted ?? false) {
+      _futurePopup?.remove();
+      _futurePopup = null;
+    }
+    super.dispose();
   }
 
   final ThemeData _orangePickerTheme = ThemeData.light().copyWith(
@@ -108,6 +121,36 @@ class _ManagerScreenState extends State<ManagerScreen> {
     ),
     dialogBackgroundColor: Colors.white,
   );
+
+  String capitalizeEachWord(String text) {
+    if (text.isEmpty) return text;
+    return text.toLowerCase().split(' ').map((word) => word[0].toUpperCase() + word.substring(1)).join(' ');
+  }
+
+  Future<void> _fetchStaffMembers() async {
+    try {
+      QuerySnapshot snapshot = await FirebaseFirestore.instance
+          .collection('staff')
+          .where('branch', isEqualTo: widget.selectedBranchCode)
+          .get();
+
+      List<String> names = snapshot.docs.map((doc) {
+        var data = doc.data() as Map<String, dynamic>;
+        return capitalizeEachWord(data['username'] as String);
+      }).toList();
+
+      setState(() {
+        staffMembers = names;
+        _isLoadingStaff = false;
+        _errorMessage = names.isEmpty ? 'No staff found for this branch' : '';
+      });
+    } catch (e) {
+      setState(() {
+        _isLoadingStaff = false;
+        _errorMessage = 'Error fetching staff: $e';
+      });
+    }
+  }
 
   Future<void> _debugListPointsDocuments() async {
     try {
@@ -145,33 +188,46 @@ class _ManagerScreenState extends State<ManagerScreen> {
     }
   }
 
-  String capitalizeEachWord(String text) {
-    if (text.isEmpty) return text;
-    return text.toLowerCase().split(' ').map((word) => word[0].toUpperCase() + word.substring(1)).join(' ');
-  }
-
-  Future<void> _fetchStaffMembers() async {
-    try {
-      QuerySnapshot snapshot = await FirebaseFirestore.instance
-          .collection('staff')
-          .where('branch', isEqualTo: widget.selectedBranchCode)
-          .get();
-
-      List<String> names = snapshot.docs.map((doc) {
-        var data = doc.data() as Map<String, dynamic>;
-        return capitalizeEachWord(data['username'] as String);
-      }).toList();
-
-      setState(() {
-        staffMembers = names;
-        _isLoadingStaff = false;
-        _errorMessage = names.isEmpty ? 'No staff found for this branch' : '';
-      });
-    } catch (e) {
-      setState(() {
-        _isLoadingStaff = false;
-        _errorMessage = 'Error fetching staff: $e';
-      });
+  Future<void> _checkAndShowPlanningDialog() async {
+    final taskProvider = Provider.of<TaskProvider>(context, listen: false);
+    bool isPlanningComplete = await taskProvider.isTomorrowPlanningComplete();
+    if (!isPlanningComplete && mounted) {
+      showDialog(
+        context: context,
+        builder: (context) => AlertDialog(
+          shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(20)),
+          title: const Text(
+            "Reminder to Complete Planning",
+            style: TextStyle(fontWeight: FontWeight.bold),
+          ),
+          content: const Text(
+            "Please complete the 1-Day Planning task for tomorrow first.\nYour tasks are now on hold until planning is done.",
+          ),
+          actions: [
+            TextButton(
+              onPressed: () {
+                Navigator.pop(context);
+                // Set date to tomorrow to encourage planning
+                setState(() {
+                  selectedDate = DateTime.now().add(const Duration(days: 1));
+                  _showFuturePlanningProgress(taskProvider);
+                });
+              },
+              child: const Text(
+                "Plan Now",
+                style: TextStyle(color: Colors.orange),
+              ),
+            ),
+            TextButton(
+              onPressed: () => Navigator.pop(context),
+              child: const Text(
+                "Dismiss",
+                style: TextStyle(color: Colors.grey),
+              ),
+            ),
+          ],
+        ),
+      );
     }
   }
 
